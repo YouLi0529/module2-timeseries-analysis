@@ -13,29 +13,29 @@ The scientific goal is to evaluate long-term hydrological and suspended sediment
 
 ```text
 module2-timeseries-analysis/
-├── notebooks/
-│   └── Module2_Timeseries_Analysis.ipynb
-├── src/
-│   ├── data_loading.py
-│   ├── section1_timeseries_review.py
-│   ├── section2_timeseries_modelling.py
-│   ├── section3_model_evaluation.py
-│   ├── section4_sediment_influence.py
-│   ├── section5_dependency_analysis.py
-│   └── plotting.py
-├── data/
-│   ├── raw/
-│   └── processed/
-├── outputs/
-│   ├── figures/
-│   ├── tables/
-│   └── reports/
-├── docs/
-├── tests/
-├── requirements.txt
-├── environment.yml
-├── run_all.py
-└── README.md
+|-- notebooks/
+|   `-- Module2_Timeseries_Analysis.ipynb
+|-- src/
+|   |-- data_loading.py
+|   |-- section1_timeseries_review.py
+|   |-- section2_timeseries_modelling.py
+|   |-- section3_model_evaluation.py
+|   |-- section4_sediment_influence.py
+|   |-- section5_dependency_analysis.py
+|   `-- plotting.py
+|-- data/
+|   |-- raw/
+|   `-- processed/
+|-- outputs/
+|   |-- figures/
+|   |-- tables/
+|   `-- reports/
+|-- docs/
+|-- tests/
+|-- requirements.txt
+|-- environment.yml
+|-- run_all.py
+`-- README.md
 ```
 
 ## Install Dependencies
@@ -126,8 +126,14 @@ Read:
 
 - `docs/GIT_WORKFLOW_FOR_TWO_MEMBERS.md`
 - `docs/PEER_REVIEW_CHECKLIST.md`
+- `docs/CODE_WALKTHROUGH.md`
+- `docs/PROJECT_EXPLANATION_GUIDE.md`
+- `docs/SECTION_BY_SECTION_METHODS.md`
+
+`docs/GIT_WORKFLOW_FOR_TWO_MEMBERS.md` is personalized for this team: you are the GitHub repository owner and inviter, and Li Ling is the invited collaborator.
+
+`docs/CODE_WALKTHROUGH.md` explains the notebook and every `.py` file block by block.
 
 ## Important Scientific Reminder
 
 Do not invent final numerical results. The notebook computes final values only from the real raw data in `data/raw/`. Demo data may be used in tests, but never as scientific evidence.
-
