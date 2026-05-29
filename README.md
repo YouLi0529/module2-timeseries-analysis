@@ -1,15 +1,17 @@
 # Module 2 - Timeseries Analysis
 
-This repository supports the Module 2 water resources lab assignment on timeseries analysis for the Rhein-Ill confluence.
+This repository contains the code and notebook for Assignment 2, Module 2:
+timeseries analysis of discharge `Q` and suspended sediment concentration `C`.
 
-The project studies monthly discharge `Q` and suspended sediment concentration `C` at:
+The analysis uses two stations:
 
-- Gisingen station on the Ill River
-- Diepoldsau, Rietbrucke station on the Rhein River downstream of the confluence
+- Gisingen on the Ill River
+- Diepoldsau, Rietbrucke on the Rhein River
 
-The scientific goal is to evaluate long-term hydrological and suspended sediment behaviour, fit AR/ARMA models, generate synthetic monthly series, estimate sediment mass rates, and discuss whether independent Q and C models are scientifically defensible.
+The raw high-frequency data are aggregated to monthly mean values before the
+main analysis.
 
-## Repository Structure
+## Project Structure
 
 ```text
 module2-timeseries-analysis/
@@ -28,27 +30,19 @@ module2-timeseries-analysis/
 |   `-- processed/
 |-- outputs/
 |   |-- figures/
-|   |-- tables/
-|   `-- reports/
-|-- docs/
+|   |-- reports/
+|   `-- tables/
 |-- tests/
 |-- requirements.txt
 |-- environment.yml
 |-- run_all.py
+|-- .gitignore
 `-- README.md
 ```
 
-## Install Dependencies
+## Installation
 
-Using `venv`:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-On Windows PowerShell:
+Using a Python virtual environment:
 
 ```powershell
 python -m venv .venv
@@ -63,15 +57,18 @@ conda env create -f environment.yml
 conda activate module2-timeseries-analysis
 ```
 
-## Raw Data Location
+If you run the notebook in VS Code, choose the Python environment from this
+project as the notebook kernel.
 
-Place raw files in:
+## Raw Data
+
+Place the four raw CSV files in:
 
 ```text
 data/raw/
 ```
 
-The current local project can read the provided four-file layout:
+Expected files and columns:
 
 ```text
 Q_Gisingen_1976-2023.csv       columns: timestamp, q_m3s
@@ -80,60 +77,63 @@ Q_Diepoldsau_m3s.csv           columns: timestamp, q_m3s
 SSC_Diepoldsau_gL.csv          columns: timestamp, ssc_gL
 ```
 
-The loader also accepts CSV or Excel files with similar names and columns such as:
-
-```text
-datetime, Q, C, station, variable, value
-```
-
-Raw data are ignored by Git so large files are not pushed accidentally.
+Raw data files are not uploaded to GitHub.
 
 ## Run the Notebook
 
-From the repository root:
+Open and run:
 
-```bash
-jupyter notebook notebooks/Module2_Timeseries_Analysis.ipynb
+```text
+notebooks/Module2_Timeseries_Analysis.ipynb
 ```
 
-Run all notebook cells from top to bottom. Generated figures are saved in `outputs/figures/`; generated tables are saved in `outputs/tables/`.
+The notebook follows the five assignment sections:
 
-## Run Tests
+1. Timeseries review
+2. Timeseries modelling
+3. Timeseries application and evaluation
+4. Ill to Rhein relative sediment influence
+5. Independent variables
 
-```bash
-pytest
-```
+Generated figures and tables are saved under `outputs/`.
 
-## Run a Smoke Test
+## Run From the Terminal
 
-Basic loading, monthly aggregation, Section 1, and Section 2:
+Basic smoke test:
 
 ```bash
 python run_all.py
 ```
 
-Full pipeline including AR/ARMA fitting:
+Full analysis:
 
 ```bash
 python run_all.py --full
 ```
 
-## Git Workflow
+Run tests:
 
-The main branch must always run from start to finish. Use feature branches and pull requests for every substantial change. Both team members must branch and merge at least once.
+```bash
+python -m pytest -q
+```
 
-Read:
+## GitHub Workflow
 
-- `docs/GIT_WORKFLOW_FOR_TWO_MEMBERS.md`
-- `docs/PEER_REVIEW_CHECKLIST.md`
-- `docs/CODE_WALKTHROUGH.md`
-- `docs/PROJECT_EXPLANATION_GUIDE.md`
-- `docs/SECTION_BY_SECTION_METHODS.md`
+Use feature branches and pull requests for collaboration. The `main` branch
+should stay runnable from start to finish.
 
-`docs/GIT_WORKFLOW_FOR_TWO_MEMBERS.md` is personalized for this team: you are the GitHub repository owner and inviter, and Li Ling is the invited collaborator.
+Only the files needed to run and review the assignment are tracked here:
 
-`docs/CODE_WALKTHROUGH.md` explains the notebook and every `.py` file block by block.
+- source code in `src/`
+- the main notebook
+- environment files
+- tests
+- repository configuration files
 
-## Important Scientific Reminder
+Local explanation notes in `docs/` are ignored by Git.
 
-Do not invent final numerical results. The notebook computes final values only from the real raw data in `data/raw/`. Demo data may be used in tests, but never as scientific evidence.
+## Notes
+
+The notebook computes numerical results from the raw data placed in
+`data/raw/`. Do not treat test data or generated examples as final scientific
+evidence.

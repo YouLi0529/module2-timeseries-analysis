@@ -35,10 +35,9 @@ def plot_monthly_timeseries(
             label = f"{station}_{variable}"
             
             ax.plot(series.index, series.values, lw=1.2, label="monthly mean")
-            trend_info = review_results[label]["trend"]
-            trend = trend_info["trend"]
+            trend = review_results[label]["trend_line"]
             
-            if trend_info["significant"]:
+            if review_results[label]["significant_trend"]:
                 ax.plot(trend.index, trend.values, color="crimson", lw=1.4, label="significant trend")
             else:
                 ax.plot(trend.index, trend.values, color="gray", lw=1.0, ls="--", label="linear fit")
@@ -63,14 +62,13 @@ def plot_acf_pacf_grid(
         axes = np.array([axes])
         
     for row, label in enumerate(labels):
-        acf_pacf = order_results[label]["acf_pacf"]
         for col, key in enumerate(("acf", "pacf")):
             ax = axes[row, col]
-            lags = acf_pacf["lags"]
-            values = acf_pacf[key]
+            lags = order_results[label]["lags"]
+            values = order_results[label][key]
             
             ax.stem(lags, values, basefmt=" ", linefmt="C0-", markerfmt="C0o")
-            conf = acf_pacf["confidence"]
+            conf = order_results[label]["confidence"]
             ax.axhline(conf, color="crimson", ls="--", lw=1)
             ax.axhline(-conf, color="crimson", ls="--", lw=1)
             ax.axhline(0, color="black", lw=0.8)
@@ -137,14 +135,14 @@ def plot_synthetic_series(
     review_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    labels = list(sediment_results["synthetic"])
+    labels = list(sediment_results["synth"])
     fig, axes = plt.subplots(len(labels), 1, figsize=(12, 2.5 * len(labels)), sharex=False)
     
     if len(labels) == 1:
         axes = np.array([axes])
         
     for ax, label in zip(axes.ravel(), labels):
-        historical = review_results[label]["normalization"]["series"]
+        historical = review_results[label]["normalized"]
         ax.plot(historical.index, historical.values, color="black", lw=1.0, label="historical normalized")
         synthetic = sediment_results["synth"][label]["norm"]
         for column in synthetic.columns:

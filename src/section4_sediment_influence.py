@@ -13,7 +13,15 @@ from .data_loading import StationData, align_station_q_c
 
 def mass_rate(conc_gL: pd.Series, q_m3s: pd.Series) -> pd.Series:
     df = pd.concat({"C": conc_gL, "Q": q_m3s}, axis=1).dropna()
-    return df["C"] * df["Q"]
+    mass = df["C"] * df["Q"]
+    mass.name = "sediment_mass_kg_s"
+    return mass
+
+
+def concentration_gL_times_discharge_m3s_to_kg_s(
+    concentration_gL: pd.Series, discharge_m3s: pd.Series
+) -> pd.Series:
+    return mass_rate(concentration_gL, discharge_m3s)
 
 
 def sediment_yields(mass: pd.Series) -> dict:
@@ -64,15 +72,13 @@ def simulate_paths(fit, n_months=120, n_paths=10, seed=42) -> pd.DataFrame:
 def rescale(paths: pd.DataFrame, info: dict, start_idx: int, dates: pd.DatetimeIndex, floor=0.0) -> dict:
     paths = paths.copy()
     paths.index = dates
-    t = info["trend"]
-    norm = info["normalization"]
     x = np.arange(start_idx, start_idx + len(paths), dtype=float)
 
-    if norm["removed"] == "linear_trend":
-        base = t["intercept"] + t["slope"] * x + norm["offset"]
+    if info["removed"] == "linear_trend":
+        base = info["intercept"] + info["slope"] * x + info["offset"]
         note = "Trend extrapolated."
     else:
-        base = np.full(len(paths), norm["offset"], dtype=float)
+        base = np.full(len(paths), info["offset"], dtype=float)
         note = "Mean restored."
 
     res = paths.add(base, axis=0)
@@ -124,6 +130,8 @@ def observed_summary(data: StationData) -> dict:
             "note": "Ill/Gisingen ÷ Rhein."
         }
     
+    if ratio_info["months"]:
+        ratio_info["note"] = "Ill/Gisingen divided by Rhein/Diepoldsau for overlapping months."
     return {"stations": station_res, "ratio": ratio_info}
 
 
@@ -152,7 +160,7 @@ def run_sediment_influence_analysis(
             "phys": r["physical"],
             "clipped": r["clipped"],
             "note": r["note"],
-            "stats": compare_stats(review_results[lbl]["normalization"]["series"], paths),
+            "stats": compare_stats(review_results[lbl]["normalized"], paths),
         }
 
     mass_dict = {}
@@ -199,7 +207,7 @@ def format_sediment_influence(results: dict) -> str:
         "Synthetic"
     ])
     
-    cc = Math_contrib = results["contrib"]
+    cc = results["contrib"]
     if cc.empty:
         lines.append("  (none)")
     else:
