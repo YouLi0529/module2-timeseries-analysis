@@ -25,17 +25,7 @@ def plot_monthly_timeseries(
     review_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot monthly Q and C series for both stations with trend lines.
-
-    Inputs:
-        monthly_data (StationData): Monthly Q and C data by station.
-        review_results (dict): Section 1 results containing fitted trend lines.
-        output_path (Path | None): Optional path to save the figure.
-
-    Outputs:
-        plt.Figure: Matplotlib figure object.
-    """
-
+    """Plot monthly Q and C series with trend lines."""
     fig, axes = plt.subplots(2, 2, figsize=(13, 7), sharex=False)
     variables = [("Q", "Discharge Q (m3/s)"), ("C", "SSC C (g/L)")]
     for row, station in enumerate(("Gisingen", "Diepoldsau")):
@@ -61,16 +51,7 @@ def plot_acf_pacf_grid(
     order_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot ACF and PACF for every normalized series.
-
-    Inputs:
-        order_results (dict): Section 2 ACF/PACF and order-selection results.
-        output_path (Path | None): Optional path to save the figure.
-
-    Outputs:
-        plt.Figure: Matplotlib figure object.
-    """
-
+    """Plot ACF and PACF for all series."""
     labels = list(order_results)
     fig, axes = plt.subplots(len(labels), 2, figsize=(12, 2.7 * len(labels)), sharex=False)
     if len(labels) == 1:
@@ -98,16 +79,7 @@ def plot_model_diagnostics(
     evaluation_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot empirical/theoretical ACF, residual ACF, and residual QQ plots.
-
-    Inputs:
-        evaluation_results (dict): Section 3 model evaluation results.
-        output_path (Path | None): Optional path to save the figure.
-
-    Outputs:
-        plt.Figure: Matplotlib figure object.
-    """
-
+    """Plot model diagnostics: empirical/theoretical ACF, residual ACF, and QQ plots."""
     labels = list(evaluation_results)
     fig, axes = plt.subplots(len(labels), 3, figsize=(15, 2.9 * len(labels)))
     if len(labels) == 1:
@@ -155,17 +127,7 @@ def plot_synthetic_series(
     review_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot historical normalized data together with synthetic normalized paths.
-
-    Inputs:
-        sediment_results (dict): Section 4 output.
-        review_results (dict): Section 1 output with historical normalized series.
-        output_path (Path | None): Optional path to save the figure.
-
-    Outputs:
-        plt.Figure: Matplotlib figure object.
-    """
-
+    """Plot historical normalized data with synthetic normalized paths."""
     labels = list(sediment_results["synthetic"])
     fig, axes = plt.subplots(len(labels), 1, figsize=(12, 2.5 * len(labels)), sharex=False)
     if len(labels) == 1:
@@ -173,7 +135,7 @@ def plot_synthetic_series(
     for ax, label in zip(axes, labels):
         historical = review_results[label]["normalization"]["series"]
         ax.plot(historical.index, historical.values, color="black", lw=1.0, label="historical normalized")
-        synthetic = sediment_results["synthetic"][label]["normalized"]
+        synthetic = sediment_results["synth"][label]["norm"]
         for column in synthetic.columns:
             ax.plot(synthetic.index, synthetic[column], lw=0.8, alpha=0.55)
         ax.set_title(f"{label}: historical normalized data and 10 synthetic paths")
@@ -187,31 +149,22 @@ def plot_sediment_yields(
     sediment_results: Dict[str, Any],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot observed monthly climatology and synthetic contribution summaries.
-
-    Inputs:
-        sediment_results (dict): Section 4 sediment influence output.
-        output_path (Path | None): Optional path to save the figure.
-
-    Outputs:
-        plt.Figure: Matplotlib figure object.
-    """
-
+    """Plot observed monthly climatology and synthetic contribution summaries."""
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
-    for station, result in sediment_results["observed"]["stations"].items():
-        climatology = result["yields"]["monthly_climatology"]
-        axes[0].plot(climatology.index, climatology["mass_kg_s"], marker="o", label=station)
+    for station, result in sediment_results["obs"]["stations"].items():
+        climatology = result["yields"]["by_month"]
+        axes[0].plot(climatology.index, climatology["kg_s"], marker="o", label=station)
     axes[0].set_title("Observed monthly sediment mass-rate climatology")
     axes[0].set_xlabel("Calendar month")
     axes[0].set_ylabel("Mean mass rate (kg/s)")
     axes[0].grid(True, alpha=0.25)
     axes[0].legend()
 
-    synthetic_contribution = sediment_results["synthetic_contribution"]
+    synthetic_contribution = sediment_results["contrib"]
     if not synthetic_contribution.empty:
         axes[1].bar(
             synthetic_contribution["path"],
-            synthetic_contribution["ill_to_rhein_mean_mass_percent"],
+            synthetic_contribution["pct"],
             color="steelblue",
         )
     axes[1].set_title("Synthetic Ill contribution by path")
@@ -226,22 +179,13 @@ def plot_dependency_scatter(
     dependency_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot Q-C joint distributions for each station.
-
-    Inputs:
-        dependency_results (dict): Section 5 dependency analysis output.
-        output_path (Path | None): Optional path to save the figure.
-
-    Outputs:
-        plt.Figure: Matplotlib figure object.
-    """
-
+    """Plot Q-C joint distributions for each station."""
     stations = list(dependency_results)
     fig, axes = plt.subplots(1, len(stations), figsize=(6 * len(stations), 4.5))
     if len(stations) == 1:
         axes = [axes]
     for ax, station in zip(axes, stations):
-        frame = dependency_results[station]["aligned_data"]
+        frame = dependency_results[station]["data"]
         ax.scatter(frame["Q"], frame["C"], s=22, alpha=0.7)
         ax.set_title(f"{station}: Q-C joint distribution")
         ax.set_xlabel("Q (m3/s)")
@@ -249,4 +193,3 @@ def plot_dependency_scatter(
         ax.grid(True, alpha=0.25)
     fig.tight_layout()
     return _save(fig, output_path)
-
