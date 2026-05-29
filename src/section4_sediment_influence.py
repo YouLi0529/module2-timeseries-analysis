@@ -1,8 +1,8 @@
-"""Section 4: synthetic series generation and sediment influence estimates."""
+"""Sediment analysis and synthetic generation."""
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -11,336 +11,180 @@ from statsmodels.tsa.arima_process import ArmaProcess
 from .data_loading import StationData, align_station_q_c
 
 
-def concentration_gL_times_discharge_m3s_to_kg_s(concentration_gL: pd.Series, discharge_m3s: pd.Series) -> pd.Series:
-    """Convert suspended sediment concentration and discharge to mass rate.
-
-    Inputs:
-        concentration_gL (pd.Series): Suspended sediment concentration in g/L.
-        discharge_m3s (pd.Series): Discharge in m^3/s.
-
-    Outputs:
-        pd.Series: Sediment mass rate in kg/s. The conversion is direct because
-        1 g/L equals 1 kg/m^3, so C[g/L] * Q[m^3/s] = kg/s.
-    """
-
-    aligned = pd.concat({"C": concentration_gL, "Q": discharge_m3s}, axis=1).dropna()
-    mass = aligned["C"] * aligned["Q"]
-    mass.name = "sediment_mass_kg_s"
-    return mass
+def mass_rate(conc_gL: pd.Series, q_m3s: pd.Series) -> pd.Series:
+    """g/L * m^3/s = kg/s."""
+    df = pd.concat({"C": conc_gL, "Q": q_m3s}, axis=1).dropna()
+    return df["C"] * df["Q"]
 
 
-def compute_sediment_yields(mass_kg_s: pd.Series) -> Dict[str, Any]:
-    """Compute monthly and yearly sediment mass summaries.
+def sediment_yields(mass: pd.Series) -> dict:
+    """Monthly and yearly mass summaries."""
+    clean = mass.dropna().astype(float).sort_index()
+    if clean.empty:
+        raise ValueError("No valid mass data.")
+    
+    df = pd.DataFrame({"kg_s": clean})
+    df["secs"] = df.index.days_in_month * 24 * 60 * 60
+    df["kg_mo"] = df["kg_s"] * df["secs"]
+    df["tonne_mo"] = df["kg_mo"] / 1000.0
+    df["m"] = df.index.month
+    df["y"] = df.index.year
 
-    Inputs:
-        mass_kg_s (pd.Series): Monthly sediment mass rate in kg/s.
-
-    Outputs:
-        dict: Monthly table, monthly climatology, yearly table, and overall mean.
-    """
-
-    clean = mass_kg_s.dropna().astype(float).sort_index()
-    if clean.empty:
-        raise ValueError("Sediment mass series is empty after aligning Q and C.")
-    monthly = pd.DataFrame({"mass_kg_s": clean})
-    monthly["seconds_in_month"] = monthly.index.days_in_month * 24 * 60 * 60
-    monthly["mass_kg_month"] = monthly["mass_kg_s"] * monthly["seconds_in_month"]
-    monthly["mass_tonnes_month"] = monthly["mass_kg_month"] / 1000.0
-    monthly["month"] = monthly.index.month
-    monthly["year"] = monthly.index.year
-
-    monthly_climatology = monthly.groupby("month")[["mass_kg_s", "mass_tonnes_month"]].mean()
-    yearly = monthly.groupby("year").agg(
-        mean_mass_kg_s=("mass_kg_s", "mean"),
-        total_mass_tonnes=("mass_tonnes_month", "sum"),
-    )
-    return {
-        "monthly": monthly,
-        "monthly_climatology": monthly_climatology,
-        "yearly": yearly,
-        "overall_mean_kg_s": float(monthly["mass_kg_s"].mean()),
-        "overall_mean_tonnes_per_month": float(monthly["mass_tonnes_month"].mean()),
-    }
+    monthly_avg = df.groupby("m")[["kg_s", "tonne_mo"]].mean()
+    yearly_avg = df.groupby("y").agg(mean=("kg_s", "mean"), total=("tonne_mo", "sum"))
+    
+    return {
+        "monthly": df,
+        "by_month": monthly_avg,
+        "by_year": yearly_avg,
+        "mean_kg_s": float(df["kg_s"].mean()),
+        "mean_tonne_mo": float(df["tonne_mo"].mean()),
+    }
 
 
-def _innovation_scale(fit_result: Any) -> float:
-    residuals = np.asarray(fit_result.resid)
-    residuals = residuals[np.isfinite(residuals)]
-    if residuals.size < 2:
-        return 1.0
-    return float(np.std(residuals, ddof=1))
+def _std(fit) -> float:
+    """Residual std."""
+    r = np.asarray(fit.resid)[np.isfinite(np.asarray(fit.resid))]
+    return float(np.std(r, ddof=1)) if len(r) >= 2 else 1.0
 
 
-def simulate_normalized_paths(
-    fit_result: Any,
-    periods: int = 120,
-    n_paths: int = 10,
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Generate normalized synthetic paths from a fitted ARMA model.
+def simulate_paths(fit, n_months=120, n_paths=10, seed=42) -> pd.DataFrame:
+    """Generate synthetic paths."""
+    rng = np.random.default_rng(seed)
+    ar = np.r_[1.0, -np.asarray(fit.arparams)]
+    ma = np.r_[1.0, np.asarray(fit.maparams)]
+    proc = ArmaProcess(ar, ma)
+    std = _std(fit)
 
-    Inputs:
-        fit_result: Fitted statsmodels ARIMA results object.
-        periods (int): Number of future monthly steps to simulate.
-        n_paths (int): Number of synthetic paths.
-        seed (int): Random seed for reproducibility.
-
-    Outputs:
-        pd.DataFrame: Synthetic normalized values, columns path_1 ... path_n.
-    """
-
-    rng = np.random.default_rng(seed)
-    ar = np.r_[1.0, -np.asarray(fit_result.arparams)]
-    ma = np.r_[1.0, np.asarray(fit_result.maparams)]
-    process = ArmaProcess(ar, ma)
-    scale = _innovation_scale(fit_result)
-
-    paths = {}
-    for path_number in range(1, n_paths + 1):
-        sample = process.generate_sample(
-            nsample=periods,
-            scale=scale,
-            burnin=200,
-            distrvs=rng.normal,
-        )
-        paths[f"path_{path_number}"] = sample
-    return pd.DataFrame(paths)
+    out = {}
+    for i in range(1, n_paths + 1):
+        s = proc.generate_sample(nsample=n_months, scale=std, burnin=200, distrvs=rng.normal)
+        out[f"p{i}"] = s
+    return pd.DataFrame(out)
 
 
-def restore_physical_scale(
-    normalized_paths: pd.DataFrame,
-    review_result: Dict[str, Any],
-    start_index: int,
-    future_index: pd.DatetimeIndex,
-    lower_bound: float = 0.0,
-) -> Dict[str, Any]:
-    """Restore normalized synthetic paths to physical Q or C scale for mass estimates.
+def rescale(paths: pd.DataFrame, info: dict, start_idx: int, dates: pd.DatetimeIndex, floor=0.0) -> dict:
+    """Apply trend/offset to restore physical units."""
+    paths = paths.copy()
+    paths.index = dates
+    t = info["trend"]
+    norm = info["normalization"]
+    x = np.arange(start_idx, start_idx + len(paths), dtype=float)
 
-    Inputs:
-        normalized_paths (pd.DataFrame): Synthetic normalized series.
-        review_result (dict): Section 1 result containing trend/mean metadata.
-        start_index (int): First future integer time index after the observed record.
-        future_index (pd.DatetimeIndex): Future monthly timestamps.
-        lower_bound (float): Minimum allowed physical value, normally zero.
+    if norm["removed"] == "linear_trend":
+        base = t["intercept"] + t["slope"] * x + norm["offset"]
+        note = "Trend extrapolated."
+    else:
+        base = np.full(len(paths), norm["offset"], dtype=float)
+        note = "Mean restored."
 
-    Outputs:
-        dict: Restored physical paths, clipping count, and transformation note.
-    """
-
-    normalized_paths = normalized_paths.copy()
-    normalized_paths.index = future_index
-    trend = review_result["trend"]
-    normalization = review_result["normalization"]
-    x = np.arange(start_index, start_index + len(normalized_paths), dtype=float)
-
-    if normalization["removed"] == "linear_trend":
-        base = trend["intercept"] + trend["slope"] * x + normalization["offset"]
-        note = "Added back extrapolated linear trend and residual offset for physical-scale mass calculation."
-    else:
-        base = np.full(len(normalized_paths), normalization["offset"], dtype=float)
-        note = "Added back historical mean for physical-scale mass calculation."
-
-    restored = normalized_paths.add(base, axis=0)
-    clipped_count = int((restored < lower_bound).sum().sum())
-    if lower_bound is not None:
-        restored = restored.clip(lower=lower_bound)
-    return {"physical": restored, "clipped_count": clipped_count, "note": note}
+    result = paths.add(base, axis=0)
+    n_clipped = int((result < floor).sum().sum())
+    return {"physical": result.clip(lower=floor), "clipped": n_clipped, "note": note}
 
 
-def compare_synthetic_statistics(observed_normalized: pd.Series, synthetic_paths: pd.DataFrame) -> pd.DataFrame:
-    """Compare observed normalized statistics against synthetic path statistics.
-
-    Inputs:
-        observed_normalized (pd.Series): Historical normalized monthly series.
-        synthetic_paths (pd.DataFrame): Simulated normalized paths.
-
-    Outputs:
-        pd.DataFrame: Mean, standard deviation, variance, and lag-1 correlation.
-    """
-
-    observed = observed_normalized.dropna().astype(float)
-    rows = {
-        "observed": {
-            "mean": observed.mean(),
-            "std": observed.std(ddof=1),
-            "variance": observed.var(ddof=1),
-            "lag1_autocorrelation": observed.autocorr(lag=1),
-        }
-    }
-    for column in synthetic_paths.columns:
-        series = synthetic_paths[column].dropna().astype(float)
-        rows[column] = {
-            "mean": series.mean(),
-            "std": series.std(ddof=1),
-            "variance": series.var(ddof=1),
-            "lag1_autocorrelation": series.autocorr(lag=1),
-        }
-    return pd.DataFrame(rows).T
+def compare_stats(obs: pd.Series, synth: pd.DataFrame) -> pd.DataFrame:
+    """Compare observed vs synthetic stats."""
+    o = obs.dropna().astype(float)
+    s = {
+        "obs": {
+            "mean": o.mean(),
+            "std": o.std(ddof=1),
+            "var": o.var(ddof=1),
+            "lag1": o.autocorr(lag=1),
+        }
+    }
+    for col in synth.columns:
+        c = synth[col].dropna().astype(float)
+        s[col] = {"mean": c.mean(), "std": c.std(ddof=1), "var": c.var(ddof=1), "lag1": c.autocorr(lag=1)}
+    return pd.DataFrame(s).T
 
 
-def observed_sediment_summary(monthly_data: StationData) -> Dict[str, Any]:
-    """Calculate observed sediment mass summaries for both stations.
+def observed_summary(data: StationData) -> dict:
+    """Get observed sediment info."""
+    res = {}
+    for st in data:
+        a = align_station_q_c(data, st)
+        m = mass_rate(a["C"], a["Q"])
+        res[st] = {"aligned": a, "mass": m, "yields": sediment_yields(m)}
 
-    Inputs:
-        monthly_data (StationData): Monthly Q and C data.
-
-    Outputs:
-        dict: Sediment mass and yield summaries by station plus contribution ratios.
-    """
-
-    station_results = {}
-    for station in monthly_data:
-        aligned = align_station_q_c(monthly_data, station)
-        mass = concentration_gL_times_discharge_m3s_to_kg_s(aligned["C"], aligned["Q"])
-        station_results[station] = {"aligned": aligned, "mass_kg_s": mass, "yields": compute_sediment_yields(mass)}
-
-    common = pd.concat(
-        {
-            "Gisingen": station_results["Gisingen"]["mass_kg_s"],
-            "Diepoldsau": station_results["Diepoldsau"]["mass_kg_s"],
-        },
-        axis=1,
-    ).dropna()
-    if common.empty:
-        contribution = {
-            "overlap_months": 0,
-            "mean_ratio_percent": np.nan,
-            "note": "No overlapping monthly Q-C mass records between stations.",
-        }
-    else:
-        ratio = 100.0 * common["Gisingen"] / common["Diepoldsau"]
-        contribution = {
-            "overlap_months": int(common.shape[0]),
-            "mean_ratio_percent": float(ratio.mean()),
-            "median_ratio_percent": float(ratio.median()),
-            "note": "Ratio is Ill/Gisingen mass divided by downstream Rhein/Diepoldsau mass for overlapping months.",
-        }
-    return {"stations": station_results, "observed_contribution": contribution}
+    both = pd.concat({"Gisingen": res["Gisingen"]["mass"], "Diepoldsau": res["Diepoldsau"]["mass"]}, axis=1).dropna()
+    
+    if both.empty:
+        ratio_info = {"months": 0, "mean_pct": np.nan, "note": "No overlap."}
+    else:
+        r = 100.0 * both["Gisingen"] / both["Diepoldsau"]
+        ratio_info = {"months": int(both.shape[0]), "mean_pct": float(r.mean()), "median_pct": float(r.median()), "note": "Ill/Gisingen ÷ Rhein."}
+    
+    return {"stations": res, "ratio": ratio_info}
 
 
-def run_sediment_influence_analysis(
-    monthly_data: StationData,
-    review_results: Dict[str, Dict[str, Any]],
-    evaluation_results: Dict[str, Dict[str, Any]],
-    periods: int = 120,
-    n_paths: int = 10,
-    seed: int = 42,
-) -> Dict[str, Any]:
-    """Run Section 4 synthetic simulation and sediment influence analysis.
+def run_sediment_influence_analysis(monthly_data: StationData, review_results: dict, evaluation_results: dict, periods=120, n_paths=10, seed=42) -> dict:
+    """Run sediment and synthetic analysis."""
+    obs = observed_summary(monthly_data)
+    synth = {}
+    max_dt = max(r["original"].index.max() for r in review_results.values())
+    future_dt = pd.date_range(max_dt + pd.offsets.MonthBegin(1), periods=periods, freq="MS")
 
-    Inputs:
-        monthly_data (StationData): Monthly physical Q and C data.
-        review_results (dict): Section 1 trend/normalization results.
-        evaluation_results (dict): Section 3 fitted model results.
-        periods (int): Number of monthly future values to simulate.
-        n_paths (int): Number of synthetic paths.
-        seed (int): Random seed.
+    for i, (lbl, eval_r) in enumerate(evaluation_results.items()):
+        fit = eval_r["chosen"]["fit"]
+        paths = simulate_paths(fit, n_months=periods, n_paths=n_paths, seed=seed + i)
+        paths.index = future_dt
+        r = rescale(paths, review_results[lbl], start_idx=len(review_results[lbl]["original"]), dates=future_dt)
+        synth[lbl] = {
+            "norm": paths,
+            "phys": r["physical"],
+            "clipped": r["clipped"],
+            "note": r["note"],
+            "stats": compare_stats(review_results[lbl]["normalization"]["series"], paths),
+        }
 
-    Outputs:
-        dict: Observed yields, synthetic normalized paths, restored physical paths,
-        synthetic sediment yields, and contribution summaries.
-    """
+    mass_dict = {}
+    ratio_rows = []
+    for st in ("Gisingen", "Diepoldsau"):
+        q_lbl = f"{st}_Q"
+        c_lbl = f"{st}_C"
+        if q_lbl not in synth or c_lbl not in synth:
+            continue
+        py = {}
+        for pname in synth[q_lbl]["phys"].columns:
+            m = mass_rate(synth[c_lbl]["phys"][pname], synth[q_lbl]["phys"][pname])
+            py[pname] = sediment_yields(m)
+        mass_dict[st] = py
 
-    observed = observed_sediment_summary(monthly_data)
-    synthetic: Dict[str, Any] = {}
-    max_last_date = max(result["original"].index.max() for result in review_results.values())
-    future_index = pd.date_range(max_last_date + pd.offsets.MonthBegin(1), periods=periods, freq="MS")
+    if "Gisingen" in mass_dict and "Diepoldsau" in mass_dict:
+        for pn in mass_dict["Gisingen"]:
+            ill = mass_dict["Gisingen"][pn]["mean_kg_s"]
+            rhein = mass_dict["Diepoldsau"][pn]["mean_kg_s"]
+            pct = np.nan if rhein == 0 else 100.0 * ill / rhein
+            ratio_rows.append({"path": pn, "pct": pct})
+    ratio_df = pd.DataFrame(ratio_rows)
 
-    for i, (label, evaluation) in enumerate(evaluation_results.items()):
-        fit_result = evaluation["chosen"]["fit"]
-        paths = simulate_normalized_paths(fit_result, periods=periods, n_paths=n_paths, seed=seed + i)
-        paths.index = future_index
-        restored = restore_physical_scale(
-            paths,
-            review_results[label],
-            start_index=len(review_results[label]["original"]),
-            future_index=future_index,
-        )
-        synthetic[label] = {
-            "normalized": paths,
-            "physical": restored["physical"],
-            "clipped_count": restored["clipped_count"],
-            "restore_note": restored["note"],
-            "statistics": compare_synthetic_statistics(
-                review_results[label]["normalization"]["series"],
-                paths,
-            ),
-        }
-
-    synthetic_mass = {}
-    synthetic_contribution_rows = []
-    for station in ("Gisingen", "Diepoldsau"):
-        q_label = f"{station}_Q"
-        c_label = f"{station}_C"
-        if q_label not in synthetic or c_label not in synthetic:
-            continue
-        path_yields = {}
-        for path_name in synthetic[q_label]["physical"].columns:
-            mass = concentration_gL_times_discharge_m3s_to_kg_s(
-                synthetic[c_label]["physical"][path_name],
-                synthetic[q_label]["physical"][path_name],
-            )
-            path_yields[path_name] = compute_sediment_yields(mass)
-        synthetic_mass[station] = path_yields
-
-    if "Gisingen" in synthetic_mass and "Diepoldsau" in synthetic_mass:
-        for path_name in synthetic_mass["Gisingen"]:
-            ill_mean = synthetic_mass["Gisingen"][path_name]["overall_mean_kg_s"]
-            rhein_mean = synthetic_mass["Diepoldsau"][path_name]["overall_mean_kg_s"]
-            ratio = np.nan if rhein_mean == 0 else 100.0 * ill_mean / rhein_mean
-            synthetic_contribution_rows.append(
-                {"path": path_name, "ill_to_rhein_mean_mass_percent": ratio}
-            )
-    synthetic_contribution = pd.DataFrame(synthetic_contribution_rows)
-
-    return {
-        "future_index": future_index,
-        "observed": observed,
-        "synthetic": synthetic,
-        "synthetic_mass": synthetic_mass,
-        "synthetic_contribution": synthetic_contribution,
-    }
+    return {"dates": future_dt, "obs": obs, "synth": synth, "masses": mass_dict, "contrib": ratio_df}
 
 
-def format_sediment_influence(results: Dict[str, Any]) -> str:
-    """Format Section 4 results for notebook printing.
+def format_sediment_influence(results: dict) -> str:
+    """Format results as text."""
+    lines = ["Sediment mass"]
+    for st, r in results["obs"]["stations"].items():
+        y = r["yields"]
+        lines.append(f"  {st}: {y['mean_kg_s']:.4g} kg/s; {y['mean_tonne_mo']:.4g} tonnes/mo")
+    
+    c = results["obs"]["ratio"]
+    lines.append("Contribution")
+    lines.append(f"  months: {c['months']}")
+    lines.append(f"  mean: {c['mean_pct']:.4g}%")
+    lines.append(f"  {c['note']}")
 
-    Inputs:
-        results (dict): Output from run_sediment_influence_analysis.
-
-    Outputs:
-        str: Human-readable sediment mass and contribution summary.
-    """
-
-    lines = ["Observed sediment mass summaries"]
-    for station, station_result in results["observed"]["stations"].items():
-        yields = station_result["yields"]
-        lines.append(
-            f"  {station}: mean mass rate={yields['overall_mean_kg_s']:.4g} kg/s; "
-            f"mean monthly mass={yields['overall_mean_tonnes_per_month']:.4g} tonnes/month"
-        )
-    contribution = results["observed"]["observed_contribution"]
-    lines.append("Observed Ill-to-Rhein contribution")
-    lines.append(f"  overlap months: {contribution['overlap_months']}")
-    lines.append(f"  mean ratio: {contribution['mean_ratio_percent']:.4g}%")
-    lines.append(f"  note: {contribution['note']}")
-
-    lines.append("Synthetic path contribution")
-    synthetic_contribution = results["synthetic_contribution"]
-    if synthetic_contribution.empty:
-        lines.append("  Synthetic contribution could not be calculated.")
-    else:
-        lines.append(
-            f"  mean across paths: {synthetic_contribution['ill_to_rhein_mean_mass_percent'].mean():.4g}%"
-        )
-        lines.append(
-            f"  range across paths: {synthetic_contribution['ill_to_rhein_mean_mass_percent'].min():.4g}% "
-            f"to {synthetic_contribution['ill_to_rhein_mean_mass_percent'].max():.4g}%"
-        )
-    for label, synthetic in results["synthetic"].items():
-        lines.append(
-            f"  {label}: clipped {synthetic['clipped_count']} negative restored values to zero; "
-            f"{synthetic['restore_note']}"
-        )
-    return "\n".join(lines)
-
+    lines.append("Synthetic")
+    cc = results["contrib"]
+    if cc.empty:
+        lines.append("  (none)")
+    else:
+        lines.append(f"  mean: {cc['pct'].mean():.4g}%")
+        lines.append(f"  range: {cc['pct'].min():.4g}% to {cc['pct'].max():.4g}%")
+    
+    for lbl, s in results["synth"].items():
+        lines.append(f"  {lbl}: {s['clipped']} clipped; {s['note']}")
+    
+    return "\n".join(lines)
