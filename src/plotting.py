@@ -44,8 +44,8 @@ def plot_monthly_timeseries(
             series = monthly_data[station][variable]
             label = f"{station}_{variable}"
             ax.plot(series.index, series.values, lw=1.2, label="monthly mean")
-            trend = review_results[label]["trend"]["trend"]
-            if review_results[label]["trend"]["significant"]:
+            trend = review_results[label]["trend_line"]
+            if review_results[label]["significant_trend"]:
                 ax.plot(trend.index, trend.values, color="crimson", lw=1.4, label="significant trend")
             else:
                 ax.plot(trend.index, trend.values, color="gray", lw=1.0, ls="--", label="linear fit")
@@ -76,13 +76,12 @@ def plot_acf_pacf_grid(
     if len(labels) == 1:
         axes = np.array([axes])
     for row, label in enumerate(labels):
-        acf_pacf = order_results[label]["acf_pacf"]
         for col, key in enumerate(("acf", "pacf")):
             ax = axes[row, col]
-            lags = acf_pacf["lags"]
-            values = acf_pacf[key]
+            lags = order_results[label]["lags"]
+            values = order_results[label][key]
             ax.stem(lags, values, basefmt=" ", linefmt="C0-", markerfmt="C0o")
-            conf = acf_pacf["confidence"]
+            conf = order_results[label]["confidence"]
             ax.axhline(conf, color="crimson", ls="--", lw=1)
             ax.axhline(-conf, color="crimson", ls="--", lw=1)
             ax.axhline(0, color="black", lw=0.8)
@@ -171,7 +170,7 @@ def plot_synthetic_series(
     if len(labels) == 1:
         axes = [axes]
     for ax, label in zip(axes, labels):
-        historical = review_results[label]["normalization"]["series"]
+        historical = review_results[label]["normalized"]
         ax.plot(historical.index, historical.values, color="black", lw=1.0, label="historical normalized")
         synthetic = sediment_results["synthetic"][label]["normalized"]
         for column in synthetic.columns:
@@ -249,4 +248,3 @@ def plot_dependency_scatter(
         ax.grid(True, alpha=0.25)
     fig.tight_layout()
     return _save(fig, output_path)
-

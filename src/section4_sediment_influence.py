@@ -129,15 +129,13 @@ def restore_physical_scale(
 
     normalized_paths = normalized_paths.copy()
     normalized_paths.index = future_index
-    trend = review_result["trend"]
-    normalization = review_result["normalization"]
     x = np.arange(start_index, start_index + len(normalized_paths), dtype=float)
 
-    if normalization["removed"] == "linear_trend":
-        base = trend["intercept"] + trend["slope"] * x + normalization["offset"]
+    if review_result["removed"] == "linear_trend":
+        base = review_result["intercept"] + review_result["slope"] * x + review_result["offset"]
         note = "Added back extrapolated linear trend and residual offset for physical-scale mass calculation."
     else:
-        base = np.full(len(normalized_paths), normalization["offset"], dtype=float)
+        base = np.full(len(normalized_paths), review_result["offset"], dtype=float)
         note = "Added back historical mean for physical-scale mass calculation."
 
     restored = normalized_paths.add(base, axis=0)
@@ -262,7 +260,7 @@ def run_sediment_influence_analysis(
             "clipped_count": restored["clipped_count"],
             "restore_note": restored["note"],
             "statistics": compare_synthetic_statistics(
-                review_results[label]["normalization"]["series"],
+                review_results[label]["normalized"],
                 paths,
             ),
         }
@@ -343,4 +341,3 @@ def format_sediment_influence(results: Dict[str, Any]) -> str:
             f"{synthetic['restore_note']}"
         )
     return "\n".join(lines)
-

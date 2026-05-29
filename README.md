@@ -80,13 +80,9 @@ Q_Diepoldsau_m3s.csv           columns: timestamp, q_m3s
 SSC_Diepoldsau_gL.csv          columns: timestamp, ssc_gL
 ```
 
-The loader also accepts CSV or Excel files with similar names and columns such as:
-
-```text
-datetime, Q, C, station, variable, value
-```
-
-Raw data are ignored by Git so large files are not pushed accidentally.
+The loader is intentionally project-specific: it expects these four CSV filenames
+and the exact columns shown above. Raw data are ignored by Git so large files are
+not pushed accidentally.
 
 ## Run the Notebook
 
@@ -124,13 +120,14 @@ The main branch must always run from start to finish. Use feature branches and p
 
 Read:
 
+- `docs/BEGINNER_VSCODE_GITHUB_GUIDE_FOR_COLLABORATOR.md`
 - `docs/GIT_WORKFLOW_FOR_TWO_MEMBERS.md`
 - `docs/PEER_REVIEW_CHECKLIST.md`
 - `docs/CODE_WALKTHROUGH.md`
 - `docs/PROJECT_EXPLANATION_GUIDE.md`
 - `docs/SECTION_BY_SECTION_METHODS.md`
 
-`docs/GIT_WORKFLOW_FOR_TWO_MEMBERS.md` is personalized for this team: you are the GitHub repository owner and inviter, and Li Ling is the invited collaborator.
+`docs/BEGINNER_VSCODE_GITHUB_GUIDE_FOR_COLLABORATOR.md` is a friendly step-by-step VS Code, Git, and GitHub guide for the collaborator's Section 4/5 work.
 
 `docs/CODE_WALKTHROUGH.md` explains the notebook and every `.py` file block by block.
 

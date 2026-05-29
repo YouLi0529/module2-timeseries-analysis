@@ -441,7 +441,7 @@ outputs/figures/section5_q_c_dependency.png
 
 ## 3. `src/data_loading.py`
 
-这个模块负责数据读取、数据结构整理和月尺度聚合。
+这个模块负责数据读取、数据结构整理和月尺度聚合。现在它已经被简化成项目专用版本：只读取老师给的四个 CSV 文件，不再尝试兼容 Excel、long-format 或各种未知列名。这样更适合你们真实项目，也更容易解释。
 
 ### `StationData`
 
@@ -464,29 +464,45 @@ data["Diepoldsau"]["C"]
 
 自定义错误类型。原始数据缺失时，代码不会给一个模糊的系统错误，而是说明期望哪些文件和列。
 
-### `SeriesSpec`
+### `TIMESTAMP_COLUMN`
 
-`dataclass`，描述一条需要读取的序列：
+常量：
 
-- station 名称；
-- variable 名称；
-- 文件名中应该包含哪些关键词；
-- 优先识别哪些 value column。
+```python
+TIMESTAMP_COLUMN = "timestamp"
+```
 
-### `SERIES_SPECS`
+意思是：四个原始 CSV 都应该有一列叫 `timestamp`，这列是时间。
 
-定义四条核心序列：
+### `RAW_SERIES`
 
-- Gisingen Q
-- Gisingen C
-- Diepoldsau Q
-- Diepoldsau C
+这是最重要的项目配置。它明确告诉代码四条序列分别来自哪个文件、读取哪个数值列：
 
-这里也定义了可接受的列名，比如 `q_m3s`、`ssc_gL`、`Q`、`C`、`concentration`。
+```python
+RAW_SERIES = {
+    "Gisingen": {
+        "Q": {"filename": "Q_Gisingen_1976-2023.csv", "value_column": "q_m3s"},
+        "C": {"filename": "SSC_Gisingen_2003-2020.csv", "value_column": "ssc_gL"},
+    },
+    "Diepoldsau": {
+        "Q": {"filename": "Q_Diepoldsau_m3s.csv", "value_column": "q_m3s"},
+        "C": {"filename": "SSC_Diepoldsau_gL.csv", "value_column": "ssc_gL"},
+    },
+}
+```
+
+你可以这样解释：
+
+```text
+Gisingen 的 Q 从 Q_Gisingen_1976-2023.csv 读取 q_m3s。
+Gisingen 的 C 从 SSC_Gisingen_2003-2020.csv 读取 ssc_gL。
+Diepoldsau 的 Q 从 Q_Diepoldsau_m3s.csv 读取 q_m3s。
+Diepoldsau 的 C 从 SSC_Diepoldsau_gL.csv 读取 ssc_gL。
+```
 
 ### `expected_data_message()`
 
-返回原始数据格式说明。测试中也会检查数据缺失时是否能给出清楚提示。
+返回原始数据格式说明。文件缺失时，错误信息会告诉你应该把哪些 CSV 放进 `data/raw/`，以及每个 CSV 应该有哪些列。
 
 ### `ensure_project_directories(project_root)`
 
@@ -500,46 +516,21 @@ outputs/tables
 outputs/reports
 ```
 
-### `list_supported_data_files(data_dir)`
+### `read_required_csv(path, value_column)`
 
-列出 `data/raw/` 中支持的文件：
-
-- `.csv`
-- `.xlsx`
-- `.xls`
-
-如果目录不存在，抛出 `DataNotFoundError`。
-
-### `_normalise_name(...)`
-
-内部辅助函数，把列名变成更容易比较的形式，比如去掉空格、转小写。
-
-### `_find_datetime_column(...)`
-
-从列名中寻找时间列。可识别：
-
-```text
-timestamp, datetime, date_time, date, time
-```
-
-### `_find_value_column(...)`
-
-根据候选列名寻找数值列。比如 Q 文件优先找 `q_m3s`，C 文件优先找 `ssc_gL`。
-
-### `read_timeseries_file(...)`
-
-读取单个 CSV 或 Excel 文件。
+读取一个指定的 CSV 文件。
 
 它会：
 
-- 读取表格；
-- 找时间列；
-- 找数值列；
-- 转换 datetime；
-- 转换 numeric values；
-- 删除无效值；
+- 检查文件是否存在；
+- 用 `pd.read_csv(path)` 读取 CSV；
+- 检查是否有 `timestamp` 和指定的数值列，比如 `q_m3s`；
+- 把 `timestamp` 转成真正的时间；
+- 把数值列转成数字；
+- 删除无法转换的坏数据；
 - 按时间排序；
-- 删除重复 timestamp。
+- 删除重复 timestamp；
+- 返回一条干净的 `pd.Series`。
 
 输出是：
 
@@ -547,27 +538,38 @@ timestamp, datetime, date_time, date, time
 pd.Series
 ```
 
-index 是 `DatetimeIndex`。
+它可以理解为“一列带时间索引的数据”。
 
-### `_find_file_for_spec(...)`
-
-根据 `SeriesSpec` 在 raw 文件夹中找到对应文件。例如 Gisingen Q 会找文件名中同时包含 `q` 和 `gisingen` 的文件。
-
-### `_try_load_combined_long_file(...)`
-
-备用读取逻辑。如果不是四个独立文件，而是一个 long-format 文件，也可以尝试读取。
-
-long-format 例子：
+例如原始 CSV 是：
 
 ```text
-datetime, station, variable, value
+timestamp,q_m3s
+1984-01-01 00:00:00,113.081
+1984-01-01 00:10:00,113.044
+```
+
+读取后大致变成：
+
+```python
+timestamp
+1984-01-01 00:00:00    113.081
+1984-01-01 00:10:00    113.044
 ```
 
 ### `load_project_raw_data(data_dir)`
 
 读取全部四条 raw series，并返回 `StationData`。
 
-如果缺文件，它会调用 `expected_data_message()` 给出清楚说明。
+它做的事情很直接：
+
+```text
+进入 data/raw/
+-> 按 RAW_SERIES 找四个 CSV 文件
+-> 每个文件调用 read_required_csv(...)
+-> 把结果放进 raw_data[station][variable]
+```
+
+如果缺文件，它会抛出 `DataNotFoundError`，并列出缺少的文件。
 
 ### `aggregate_monthly_mean(series)`
 
@@ -582,6 +584,15 @@ series.resample("MS").mean()
 ### `aggregate_project_monthly(raw_data)`
 
 对所有 station 和 variable 批量做 monthly mean。
+
+它等价于：
+
+```text
+对 Gisingen Q 做 monthly mean
+对 Gisingen C 做 monthly mean
+对 Diepoldsau Q 做 monthly mean
+对 Diepoldsau C 做 monthly mean
+```
 
 ### `load_project_monthly_data(data_dir)`
 
@@ -620,197 +631,202 @@ Section 4 和 Section 5 都需要这个函数。
 
 ## 4. `src/section1_timeseries_review.py`
 
-这个模块对应 Section 1：timeseries review。
+?????? Section 1?timeseries review?????????????????????????????????? trend test?ADF test?mean/trend removal??????????????
 
-### `linear_trend_test(series, alpha=0.05)`
+### `analyse_one_series(series, alpha=0.05)`
 
-拟合线性趋势：
+?? Section 1 ?????????? monthly series ??????
 
-```text
-value = intercept + slope * month_index
-```
-
-使用 `scipy.stats.linregress`。
-
-返回：
-
-- slope
-- intercept
-- r value
-- p-value
-- standard error
-- significant flag
-- fitted trend series
-
-要点：
-
-- slope 单位是每个月的变化量。
-- p-value 小于 0.05 时，认为 slope 在 5% 显著性水平下显著。
-
-### `adf_stationarity_test(series)`
-
-运行 Augmented Dickey-Fuller test。
-
-解释：
-
-- p-value < 0.05：拒绝 unit-root null，支持 stationarity。
-- p-value >= 0.05：不能强有力支持 stationarity。
-
-### `normalize_or_detrend(series, trend_result)`
-
-根据 trend test 决定处理方式：
-
-如果 trend 显著：
+???
 
 ```text
-series - fitted trend - residual mean
+?????
+-> ?? month_index: 0, 1, 2, ...
+-> ? scipy.stats.linregress ??????
+-> ? slope p-value ?? trend ????
+-> ? adfuller ? ADF stationarity check
+-> ?? trend ????? trend line
+-> ?? trend ?????? mean
+-> ?? normalized series ????
 ```
 
-如果 trend 不显著：
+??????????????????
 
-```text
-series - mean
+```python
+result["original"]
+result["slope"]
+result["trend_p_value"]
+result["significant_trend"]
+result["trend_line"]
+result["adf_p_value"]
+result["removed"]
+result["offset"]
+result["normalized"]
+result["variance_after"]
 ```
 
-输出的 normalized series 均值应接近 0。
-
-### `review_one_series(series, alpha=0.05)`
-
-对一条序列完成：
-
-```text
-linear trend test -> ADF test -> normalize/detrend
-```
+?????? `result["trend"]["trend"]`?`result["normalization"]["series"]` ?????
 
 ### `run_timeseries_review(monthly_data, alpha=0.05)`
 
-对四条序列全部运行 Section 1。
+????????? `analyse_one_series(...)`?
+
+```text
+Gisingen_Q
+Gisingen_C
+Diepoldsau_Q
+Diepoldsau_C
+```
+
+????????key ????? label?
 
 ### `normalized_series_collection(review_results)`
 
-从 Section 1 结果中提取 normalized series，供 Section 2 和 Section 3 使用。
+? Section 1 ????? normalized series?? Section 2 ? Section 3 ???
 
 ### `format_timeseries_review(review_results)`
 
-把 Section 1 结果整理成 notebook 中可读的打印文本。
+? slope?p-value?ADF p-value?removed component?mean ? variance ??? notebook ?????????
 
 ## 5. `src/section2_timeseries_modelling.py`
 
-这个模块对应 Section 2：ACF/PACF 和模型阶数选择。
-
-### `default_nlags(series, maximum=36)`
-
-选择安全的 lag 数量。它避免对短序列使用过多 lag。
-
-### `compute_acf_pacf(series, nlags=None)`
-
-计算：
-
-- ACF
-- PACF
-- lag array
-- approximate 95% confidence bound
-
-置信界限近似为：
-
-```text
-1.96 / sqrt(n)
-```
+?????? Section 2?ACF/PACF ??? AR/ARMA ??????????????? lag ?????? notebook ?? `nlags=24` ? `max_order=6` ??????
 
 ### `significant_lags(values, confidence)`
 
-找出超过置信界限的 lag：
+???? 95% confidence bound ? lag?
+
+?????
 
 ```text
 abs(correlation) > confidence
 ```
 
-lag 0 不参与判断。
+lag 0 ??????? lag 0 ????????
 
-### `select_candidate_orders(...)`
+### `choose_order_from_lags(significant, maximum=6)`
 
-根据 ACF/PACF 提出：
+??? lag ????????????
 
-- AR order: `(p, 0, 0)`
-- ARMA order: `(p, 0, q)`
+???
 
-代码把最大阶数限制在 6，避免模型太复杂或不稳定。
+```text
+?????? lag?order = 1
+????? lag?order = ???? lag
+?????? maximum?????? 6
+```
 
-### `analyse_acf_pacf_collection(...)`
+????????????????? lab?????????????????????
 
-对四条 normalized series 全部运行 ACF/PACF 分析和阶数选择。
+### `analyse_acf_pacf_collection(normalized_series, nlags=24, max_order=6)`
 
-### `format_order_selection(...)`
+?? Section 2 ??????
 
-把 Section 2 结果整理成 notebook 中可读的打印文本。
+??? normalized series?
+
+```text
+?? ACF
+?? PACF
+?? confidence = 1.96 / sqrt(n)
+? significant ACF lags
+? significant PACF lags
+? PACF lags ? AR ? p
+? ACF lags ? ARMA ? q
+?? AR order ? ARMA order
+```
+
+?????????
+
+```python
+result["acf"]
+result["pacf"]
+result["confidence"]
+result["significant_acf_lags"]
+result["significant_pacf_lags"]
+result["ar_order"]
+result["arma_order"]
+```
+
+### `format_order_selection(order_results)`
+
+??? lag ?????????? notebook ?????????
 
 ## 6. `src/section3_model_evaluation.py`
 
-这个模块对应 Section 3：模型拟合、诊断和选择。
+?????? Section 3??? AR/ARMA??? residuals?????????????????????????`AR` ? `ARMA` ?????????????????
 
-### `fit_arima_model(series, order)`
+### `fit_model(series, order)`
 
-使用 `statsmodels` 拟合 ARIMA 模型。
+? `statsmodels` ???? zero-mean AR ? ARMA ???
 
-本项目中：
+?????
 
-```text
-d = 0
+```python
+ARIMA(clean, order=order, trend="n")
 ```
 
-所以它实际用于 AR 或 ARMA，而不是带差分的 ARIMA。
+?????? `d=0`???????? AR ? ARMA?`trend="n"` ??????????? Section 1 ?????????? zero-mean?
 
-`trend="n"` 表示不再额外拟合常数项，因为 Section 1 已经处理成接近 zero-mean。
+### `model_theoretical_acf(fit_result, nlags)`
 
-### `theoretical_arma_acf(fit_result, nlags)`
+??????? AR ? MA ???? theoretical ACF?
 
-根据拟合出来的 AR 和 MA 参数计算 theoretical ACF。
+??????? observed empirical ACF ????????
 
-这个结果会和 empirical ACF 画在同一张图中。
+### `residual_normality(residuals)`
 
-### `residual_normality_diagnostics(residuals)`
+?????? normality diagnostics?
 
-检查 residual normality。
+- PPCC?probability plot correlation coefficient?
+- Shapiro-Wilk p-value?
 
-输出：
+?? Shapiro p-value ???? 0.05?????? `normal_at_5 = True`?
 
-- PPCC
-- Shapiro p-value 或 normaltest p-value
-- interpretation
+### `evaluate_one_model(series, order, nlags=24, alpha=0.05)`
 
-PPCC 是 probability plot correlation coefficient，用来衡量残差在 normal probability plot 上有多接近直线。
+????????????
 
-### `evaluate_model(series, order, nlags=24, alpha=0.05)`
+???
 
-对一个候选模型完成全部诊断。
+```text
+fit model
+-> ?? residuals
+-> ?? Ljung-Box p-value
+-> ?? empirical ACF
+-> ?? theoretical ACF
+-> ?? residual ACF
+-> ?? PPCC ? Shapiro p-value
+-> ?? AIC?BIC ?????
+```
 
-它会计算：
+### `choose_model(ar_result, arma_result)`
 
-- AIC
-- BIC
-- residuals
-- empirical ACF
-- theoretical ACF
-- residual ACF
-- Ljung-Box p-value
-- residual independence flag
-- normality diagnostics
+?? AR ? ARMA?
 
-### `choose_best_model(candidate_results)`
+???
 
-模型选择规则：
+```text
+???? AR residuals ?? Ljung-Box?? AR
+???? ARMA residuals ?? Ljung-Box?? ARMA
+???????????????? BIC ???
+```
 
-1. 优先考虑 residuals 通过 Ljung-Box independence test 的模型。
-2. 在通过的模型中选 BIC 最低的。
-3. 如果没有模型通过 independence test，就选 BIC 最低的，但解释时要承认模型仍有不足。
+???????????????residual independence ?????????????
 
 ### `evaluate_model_collection(...)`
 
-对四条序列分别拟合 AR 和 ARMA candidate，并选择 final model。
+??? normalized series ???? AR ? ARMA?????
+
+```python
+result["AR"]
+result["ARMA"]
+result["chosen_name"]
+result["chosen"]
+```
 
 ### `format_model_evaluation(...)`
 
-把 Section 3 模型诊断结果整理成 notebook 中可读的打印文本。
+? AIC?BIC?Ljung-Box p-value?PPCC?Shapiro p-value ???????? notebook ?????????
 
 ## 7. `src/section4_sediment_influence.py`
 
@@ -1080,4 +1096,3 @@ Section 5
 ```text
 Our notebook loads discharge and suspended sediment concentration data for Gisingen and Diepoldsau, aggregates the original 10-minute and 15-minute observations to monthly means, and then runs five analysis sections. Section 1 checks trends and prepares zero-mean normalized series. Section 2 uses ACF and PACF to select candidate AR and ARMA orders. Section 3 fits and evaluates those models using theoretical ACF, residual ACF, Ljung-Box tests, and normality diagnostics. Section 4 generates 10 synthetic 10-year monthly paths and estimates sediment mass as C times Q. Section 5 tests whether Q and C can be considered independent. The main logic is kept in src/*.py, while the notebook only calls functions, plots results, prints summaries, and comments on interpretation.
 ```
-
