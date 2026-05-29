@@ -11,7 +11,14 @@ from .data_loading import StationData, flatten_station_data
 
 
 def analyse_one_series(series: pd.Series, alpha: float = 0.05) -> dict:
-    """Check one monthly series and make it ready for AR/ARMA fitting."""
+    """Check trend and stationarity for one monthly series.
+
+    Inputs:
+        series (pd.Series): Monthly Q or C values indexed by date.
+        alpha (float): Significance level for trend and ADF tests.
+    Outputs:
+        dict: Test results, trend line, and normalized zero-mean series.
+    """
 
     clean = series.dropna().astype(float)
     if len(clean) < 12:
@@ -58,7 +65,14 @@ def analyse_one_series(series: pd.Series, alpha: float = 0.05) -> dict:
 
 
 def run_timeseries_review(monthly_data: StationData, alpha: float = 0.05) -> dict[str, dict]:
-    """Run the Section 1 checks for all Q and C series."""
+    """Run Section 1 checks for every station-variable series.
+
+    Inputs:
+        monthly_data (StationData): Monthly Q and C data grouped by station.
+        alpha (float): Significance level used in the tests.
+    Outputs:
+        dict[str, dict]: Section 1 results keyed by labels such as Gisingen_Q.
+    """
 
     return {
         label: analyse_one_series(series.rename(label), alpha=alpha)
@@ -67,7 +81,13 @@ def run_timeseries_review(monthly_data: StationData, alpha: float = 0.05) -> dic
 
 
 def normalized_series_collection(review_results: dict[str, dict]) -> dict[str, pd.Series]:
-    """Collect the normalized series used in Sections 2 and 3."""
+    """Collect the normalized series from Section 1.
+
+    Inputs:
+        review_results (dict[str, dict]): Results from run_timeseries_review.
+    Outputs:
+        dict[str, pd.Series]: Normalized series keyed by station-variable label.
+    """
 
     return {
         label: result["normalized"].rename(label)
@@ -76,7 +96,13 @@ def normalized_series_collection(review_results: dict[str, dict]) -> dict[str, p
 
 
 def format_timeseries_review(review_results: dict[str, dict]) -> str:
-    """Make a readable Section 1 printout."""
+    """Format Section 1 results for printing.
+
+    Inputs:
+        review_results (dict[str, dict]): Results from run_timeseries_review.
+    Outputs:
+        str: Human-readable summary of trend, stationarity, and normalization.
+    """
 
     lines = []
     for label, result in review_results.items():

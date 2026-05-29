@@ -8,7 +8,14 @@ from statsmodels.tsa.stattools import acf, pacf
 
 
 def significant_lags(values: np.ndarray, confidence: float) -> list[int]:
-    """Return significant lags, ignoring lag zero."""
+    """Find lags that pass the approximate confidence bound.
+
+    Inputs:
+        values (np.ndarray): ACF or PACF values, including lag zero.
+        confidence (float): Approximate 95% confidence bound.
+    Outputs:
+        list[int]: Significant lag numbers, excluding lag zero.
+    """
 
     return [
         lag
@@ -18,7 +25,14 @@ def significant_lags(values: np.ndarray, confidence: float) -> list[int]:
 
 
 def choose_order_from_lags(significant: list[int], maximum: int = 6) -> int:
-    """Choose a simple order from the significant lags."""
+    """Choose a small model order from significant lags.
+
+    Inputs:
+        significant (list[int]): Significant lag numbers.
+        maximum (int): Largest allowed AR or MA order.
+    Outputs:
+        int: Chosen order between 1 and maximum.
+    """
 
     return min(max(significant or [1]), maximum)
 
@@ -28,7 +42,15 @@ def analyse_acf_pacf_collection(
     nlags: int = 24,
     max_order: int = 6,
 ) -> dict[str, dict]:
-    """Compute ACF/PACF and choose candidate AR and ARMA orders."""
+    """Compute ACF/PACF and choose candidate AR and ARMA orders.
+
+    Inputs:
+        normalized_series (dict[str, pd.Series]): Zero-mean series from Section 1.
+        nlags (int): Number of monthly lags to calculate.
+        max_order (int): Maximum AR or MA order to allow.
+    Outputs:
+        dict[str, dict]: ACF/PACF values, confidence bounds, and candidate orders.
+    """
 
     results: dict[str, dict] = {}
     for label, series in normalized_series.items():
@@ -56,7 +78,13 @@ def analyse_acf_pacf_collection(
 
 
 def format_order_selection(order_results: dict[str, dict]) -> str:
-    """Make a readable Section 2 printout."""
+    """Format Section 2 order-selection results for printing.
+
+    Inputs:
+        order_results (dict[str, dict]): Results from analyse_acf_pacf_collection.
+    Outputs:
+        str: Human-readable summary of significant lags and model orders.
+    """
 
     lines = []
     for label, result in order_results.items():

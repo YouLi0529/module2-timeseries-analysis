@@ -28,7 +28,13 @@ class DataNotFoundError(FileNotFoundError):
 
 
 def expected_data_message() -> str:
-    """Return the filenames and columns expected in data/raw."""
+    """Describe the raw data files expected by this project.
+
+    Inputs:
+        None.
+    Outputs:
+        str: Message listing the required filenames and columns.
+    """
 
     return (
         "Expected raw data in data/raw/ as four CSV files:\n"
@@ -40,7 +46,13 @@ def expected_data_message() -> str:
 
 
 def ensure_project_directories(project_root: Path) -> None:
-    """Create the folders used by the project."""
+    """Create the folders used by the project if they are missing.
+
+    Inputs:
+        project_root (Path): Root folder of the repository.
+    Outputs:
+        None: Folders are created on disk.
+    """
 
     for relative_path in (
         "data/raw",
@@ -53,7 +65,14 @@ def ensure_project_directories(project_root: Path) -> None:
 
 
 def read_required_csv(path: Path, value_column: str) -> pd.Series:
-    """Read one CSV file and return a timestamp-indexed series."""
+    """Read one raw CSV file as a time series.
+
+    Inputs:
+        path (Path): Location of the CSV file.
+        value_column (str): Name of the numeric data column to read.
+    Outputs:
+        pd.Series: Clean numeric values indexed by timestamp.
+    """
 
     path = Path(path)
     if not path.exists():
@@ -80,7 +99,13 @@ def read_required_csv(path: Path, value_column: str) -> pd.Series:
 
 
 def load_project_raw_data(data_dir: Path) -> StationData:
-    """Load the four raw CSV files used in this assignment."""
+    """Load the four raw Q and C CSV files.
+
+    Inputs:
+        data_dir (Path): Folder containing the raw CSV files.
+    Outputs:
+        StationData: Nested dictionary with station names, variables, and raw series.
+    """
 
     data_dir = Path(data_dir)
 
@@ -94,7 +119,13 @@ def load_project_raw_data(data_dir: Path) -> StationData:
 
 
 def aggregate_monthly_mean(series: pd.Series) -> pd.Series:
-    """Aggregate a timestamp-indexed series to monthly means."""
+    """Aggregate one time series to monthly mean values.
+
+    Inputs:
+        series (pd.Series): Numeric time series with timestamps as the index.
+    Outputs:
+        pd.Series: Monthly mean values indexed by month start.
+    """
 
     monthly = series.dropna().sort_index().resample("MS").mean().dropna()
     monthly.name = series.name
@@ -102,7 +133,13 @@ def aggregate_monthly_mean(series: pd.Series) -> pd.Series:
 
 
 def aggregate_project_monthly(raw_data: StationData) -> StationData:
-    """Aggregate every raw project series to monthly means."""
+    """Aggregate all project time series to monthly means.
+
+    Inputs:
+        raw_data (StationData): Raw Q and C series grouped by station.
+    Outputs:
+        StationData: Same structure as raw_data, but with monthly mean series.
+    """
 
     monthly_data: StationData = {}
     for station, variables in raw_data.items():
@@ -113,14 +150,26 @@ def aggregate_project_monthly(raw_data: StationData) -> StationData:
 
 
 def load_project_monthly_data(data_dir: Path) -> StationData:
-    """Load raw CSV files and return monthly mean Q and C series."""
+    """Load raw CSV files and aggregate them to monthly means.
+
+    Inputs:
+        data_dir (Path): Folder containing the raw CSV files.
+    Outputs:
+        StationData: Monthly Q and C series grouped by station.
+    """
 
     raw_data = load_project_raw_data(data_dir)
     return aggregate_project_monthly(raw_data)
 
 
 def flatten_station_data(data: StationData) -> dict[str, pd.Series]:
-    """Convert nested station data into labels like Gisingen_Q."""
+    """Convert nested station data into simple labels.
+
+    Inputs:
+        data (StationData): Q and C series grouped by station.
+    Outputs:
+        dict[str, pd.Series]: Series keyed by labels such as Gisingen_Q.
+    """
 
     flat_data: dict[str, pd.Series] = {}
     for station, variables in data.items():
@@ -130,7 +179,14 @@ def flatten_station_data(data: StationData) -> dict[str, pd.Series]:
 
 
 def align_station_q_c(monthly_data: StationData, station: str) -> pd.DataFrame:
-    """Align monthly Q and C values for one station."""
+    """Align monthly Q and C values for one station.
+
+    Inputs:
+        monthly_data (StationData): Monthly Q and C data grouped by station.
+        station (str): Station name to align.
+    Outputs:
+        pd.DataFrame: Rows where both Q and C exist, with columns Q and C.
+    """
 
     station_data = monthly_data[station]
     aligned = pd.concat({"Q": station_data["Q"], "C": station_data["C"]}, axis=1).dropna()
@@ -139,7 +195,14 @@ def align_station_q_c(monthly_data: StationData, station: str) -> pd.DataFrame:
 
 
 def save_monthly_tables(monthly_data: StationData, output_dir: Path) -> dict[str, Path]:
-    """Save monthly mean series as CSV tables."""
+    """Save monthly mean series as CSV files.
+
+    Inputs:
+        monthly_data (StationData): Monthly Q and C data grouped by station.
+        output_dir (Path): Folder for the output CSV tables.
+    Outputs:
+        dict[str, Path]: Written file paths keyed by station-variable label.
+    """
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

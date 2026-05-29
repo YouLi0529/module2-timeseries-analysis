@@ -9,6 +9,14 @@ from .data_loading import StationData, align_station_q_c
 
 
 def correlation_tests(frame: pd.DataFrame) -> dict:
+    """Test the relationship between discharge and concentration.
+
+    Inputs:
+        frame (pd.DataFrame): Aligned monthly data with Q and C columns.
+    Outputs:
+        dict: Pearson, Spearman, Kendall results and independence interpretation.
+    """
+
     clean = frame[["Q", "C"]].dropna().astype(float)
     if len(clean) < 3:
         raise ValueError("Need 3+ pairs.")
@@ -35,10 +43,26 @@ def correlation_tests(frame: pd.DataFrame) -> dict:
 
 
 def run_dependency_analysis(monthly_data: StationData) -> dict:
+    """Run Q-C dependency analysis for all stations.
+
+    Inputs:
+        monthly_data (StationData): Monthly Q and C data grouped by station.
+    Outputs:
+        dict: Correlation-test results keyed by station name.
+    """
+
     return {st: correlation_tests(align_station_q_c(monthly_data, st)) for st in monthly_data}
 
 
 def format_dependency_results(res_dict: dict) -> str:
+    """Format Section 5 dependency results for printing.
+
+    Inputs:
+        res_dict (dict): Results from run_dependency_analysis.
+    Outputs:
+        str: Human-readable correlation and independence summary.
+    """
+
     lines = []
     for st, res in res_dict.items():
         lines.extend([

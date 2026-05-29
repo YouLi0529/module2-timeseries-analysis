@@ -15,7 +15,14 @@ from statsmodels.tsa.stattools import acf
 
 
 def fit_model(series: pd.Series, order: tuple[int, int, int]) -> Any:
-    """Fit one zero-mean AR or ARMA model."""
+    """Fit one zero-mean AR or ARMA model.
+
+    Inputs:
+        series (pd.Series): Normalized monthly time series.
+        order (tuple[int, int, int]): ARIMA order, with d equal to zero here.
+    Outputs:
+        Any: Fitted statsmodels ARIMA result object.
+    """
 
     clean = series.dropna().astype(float)
     with warnings.catch_warnings():
@@ -30,7 +37,14 @@ def fit_model(series: pd.Series, order: tuple[int, int, int]) -> Any:
 
 
 def model_theoretical_acf(fit_result: Any, nlags: int) -> np.ndarray:
-    """Compute the theoretical ACF from fitted ARMA parameters."""
+    """Compute theoretical ACF from fitted ARMA parameters.
+
+    Inputs:
+        fit_result (Any): Fitted statsmodels ARIMA result object.
+        nlags (int): Number of lags to calculate.
+    Outputs:
+        np.ndarray: Theoretical ACF values from lag 0 to nlags.
+    """
 
     ar = np.r_[1.0, -np.asarray(fit_result.arparams)]
     ma = np.r_[1.0, np.asarray(fit_result.maparams)]
@@ -38,7 +52,13 @@ def model_theoretical_acf(fit_result: Any, nlags: int) -> np.ndarray:
 
 
 def residual_normality(residuals: pd.Series) -> dict:
-    """Calculate two simple residual normality checks."""
+    """Calculate residual normality checks.
+
+    Inputs:
+        residuals (pd.Series): Residuals from a fitted model.
+    Outputs:
+        dict: PPCC value, Shapiro-Wilk p-value, and 5% normality decision.
+    """
 
     clean = residuals.dropna().astype(float)
     (osm, osr), _ = stats.probplot(clean, dist="norm")
@@ -57,7 +77,16 @@ def evaluate_one_model(
     nlags: int = 24,
     alpha: float = 0.05,
 ) -> dict:
-    """Fit one candidate model and calculate the diagnostics used in the notebook."""
+    """Fit one candidate model and calculate diagnostics.
+
+    Inputs:
+        series (pd.Series): Normalized monthly time series.
+        order (tuple[int, int, int]): Candidate AR or ARMA order.
+        nlags (int): Number of lags for ACF plots and diagnostics.
+        alpha (float): Significance level for the Ljung-Box test.
+    Outputs:
+        dict: Fitted model, AIC/BIC, ACFs, residuals, and diagnostic results.
+    """
 
     clean = series.dropna().astype(float)
     fit_result = fit_model(clean, order)
@@ -88,7 +117,14 @@ def evaluate_one_model(
 
 
 def choose_model(ar_result: dict, arma_result: dict) -> str:
-    """Choose AR or ARMA using residual independence first, then BIC."""
+    """Choose between AR and ARMA candidate results.
+
+    Inputs:
+        ar_result (dict): Diagnostic results for the AR model.
+        arma_result (dict): Diagnostic results for the ARMA model.
+    Outputs:
+        str: Name of the chosen model, either AR or ARMA.
+    """
 
     if ar_result["residuals_independent"] and not arma_result["residuals_independent"]:
         return "AR"
@@ -103,7 +139,16 @@ def evaluate_model_collection(
     nlags: int = 24,
     alpha: float = 0.05,
 ) -> dict[str, dict]:
-    """Fit AR and ARMA candidates for all series."""
+    """Fit AR and ARMA candidates for all normalized series.
+
+    Inputs:
+        normalized_series (dict[str, pd.Series]): Zero-mean series from Section 1.
+        order_results (dict[str, dict]): Candidate orders from Section 2.
+        nlags (int): Number of lags for ACF diagnostics.
+        alpha (float): Significance level for residual tests.
+    Outputs:
+        dict[str, dict]: AR result, ARMA result, and chosen model for each series.
+    """
 
     results: dict[str, dict] = {}
     for label, series in normalized_series.items():
@@ -122,7 +167,13 @@ def evaluate_model_collection(
 
 
 def format_model_evaluation(evaluation_results: dict[str, dict]) -> str:
-    """Make a readable Section 3 printout."""
+    """Format Section 3 model results for printing.
+
+    Inputs:
+        evaluation_results (dict[str, dict]): Results from evaluate_model_collection.
+    Outputs:
+        str: Human-readable model comparison and selected final models.
+    """
 
     lines = []
     for label, result in evaluation_results.items():

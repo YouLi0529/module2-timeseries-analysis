@@ -13,6 +13,15 @@ from .data_loading import StationData
 
 
 def _save(fig: plt.Figure, output_path: Path | None) -> plt.Figure:
+    """Save a figure when an output path is provided.
+
+    Inputs:
+        fig (plt.Figure): Matplotlib figure to save.
+        output_path (Path | None): File path for saving, or None to skip saving.
+    Outputs:
+        plt.Figure: The same figure object.
+    """
+
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -25,6 +34,16 @@ def plot_monthly_timeseries(
     review_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
+    """Plot monthly Q and C series with fitted trend lines.
+
+    Inputs:
+        monthly_data (StationData): Monthly Q and C data grouped by station.
+        review_results (dict): Section 1 trend and stationarity results.
+        output_path (Path | None): File path for saving the figure, or None.
+    Outputs:
+        plt.Figure: Figure containing monthly time-series plots.
+    """
+
     fig, axes = plt.subplots(2, 2, figsize=(13, 7), sharex=False)
     vars_list = [("Q", "Discharge Q (m3/s)"), ("C", "SSC C (g/L)")]
     
@@ -55,6 +74,15 @@ def plot_acf_pacf_grid(
     order_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
+    """Plot ACF and PACF values for all series.
+
+    Inputs:
+        order_results (dict): Section 2 ACF/PACF and order-selection results.
+        output_path (Path | None): File path for saving the figure, or None.
+    Outputs:
+        plt.Figure: Figure containing ACF and PACF plots.
+    """
+
     labels = list(order_results)
     fig, axes = plt.subplots(len(labels), 2, figsize=(12, 2.7 * len(labels)), sharex=False)
     
@@ -85,6 +113,15 @@ def plot_model_diagnostics(
     evaluation_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
+    """Plot diagnostics for chosen AR/ARMA models.
+
+    Inputs:
+        evaluation_results (dict): Section 3 model evaluation results.
+        output_path (Path | None): File path for saving the figure, or None.
+    Outputs:
+        plt.Figure: Figure with theoretical ACF, residual ACF, and probability plots.
+    """
+
     labels = list(evaluation_results)
     fig, axes = plt.subplots(len(labels), 3, figsize=(15, 2.9 * len(labels)))
     
@@ -135,6 +172,16 @@ def plot_synthetic_series(
     review_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
+    """Plot historical normalized series with synthetic paths.
+
+    Inputs:
+        sediment_results (dict): Section 4 synthetic series results.
+        review_results (dict): Section 1 normalized historical series.
+        output_path (Path | None): File path for saving the figure, or None.
+    Outputs:
+        plt.Figure: Figure comparing historical and synthetic normalized series.
+    """
+
     labels = list(sediment_results["synth"])
     fig, axes = plt.subplots(len(labels), 1, figsize=(12, 2.5 * len(labels)), sharex=False)
     
@@ -159,6 +206,15 @@ def plot_sediment_yields(
     sediment_results: Dict[str, Any],
     output_path: Path | None = None,
 ) -> plt.Figure:
+    """Plot observed sediment climatology and synthetic contribution.
+
+    Inputs:
+        sediment_results (dict): Section 4 sediment mass and contribution results.
+        output_path (Path | None): File path for saving the figure, or None.
+    Outputs:
+        plt.Figure: Figure with sediment yield and contribution plots.
+    """
+
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
     
     for station, result in sediment_results["obs"]["stations"].items():
@@ -190,6 +246,15 @@ def plot_dependency_scatter(
     dependency_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
+    """Plot Q-C scatter plots for each station.
+
+    Inputs:
+        dependency_results (dict): Section 5 dependency-test results.
+        output_path (Path | None): File path for saving the figure, or None.
+    Outputs:
+        plt.Figure: Figure with Q-C joint distribution scatter plots.
+    """
+
     stations = list(dependency_results)
     fig, axes = plt.subplots(1, len(stations), figsize=(6 * len(stations), 4.5))
     
