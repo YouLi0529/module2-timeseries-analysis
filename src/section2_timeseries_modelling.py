@@ -1,146 +1,109 @@
-"""Section 2: ACF/PACF analysis and candidate AR/ARMA order selection."""
+"""Section 2: ACF/PACF analysis and simple AR/ARMA order selection."""
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Dict
 
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import acf, pacf
 
 
-def default_nlags(series: pd.Series, maximum: int = 36) -> int:
-    """Choose a safe number of lags for monthly ACF/PACF analysis.
-
-    Inputs:
-        series (pd.Series): Monthly normalized timeseries.
-        maximum (int): Maximum lag count allowed.
-
-    Outputs:
-        int: Lag count, at least 1 and not more than one third of sample size.
-    """
-
-    n = len(series.dropna())
-    return max(1, min(maximum, n // 3))
-
-
-def compute_acf_pacf(series: pd.Series, nlags: int | None = None) -> Dict[str, Any]:
-    """Compute empirical ACF, PACF, and approximate 95% confidence bounds.
-
-    Inputs:
-        series (pd.Series): Normalized monthly timeseries.
-        nlags (int | None): Number of lags. If None, a safe default is used.
-
-    Outputs:
-        dict: ACF, PACF, lags, confidence bound, and sample size.
-    """
-
-    clean = series.dropna().astype(float)
-    if len(clean) < 8:
-        raise ValueError("At least eight observations are required for ACF/PACF analysis.")
-    nlags = default_nlags(clean) if nlags is None else int(nlags)
-    nlags = min(nlags, len(clean) // 2 - 1)
-    acf_values = acf(clean, nlags=nlags, fft=True, missing="drop")
-    pacf_values = pacf(clean, nlags=nlags, method="ywm")
-    conf = 1.96 / np.sqrt(len(clean))
-    return {
-        "lags": np.arange(nlags + 1),
-        "acf": acf_values,
-        "pacf": pacf_values,
-        "confidence": float(conf),
-        "n": int(len(clean)),
-    }
-
-
 def significant_lags(values: np.ndarray, confidence: float) -> list[int]:
-    """Identify lags whose correlation magnitude exceeds a confidence bound.
+    """Return lags whose absolute correlation is above the confidence bound.
 
     Inputs:
         values (np.ndarray): ACF or PACF values including lag zero.
-        confidence (float): Symmetric confidence bound.
+        confidence (float): Approximate 95% confidence bound.
 
     Outputs:
-        list[int]: Significant lag numbers excluding lag zero.
+        list[int]: Significant lag numbers, excluding lag zero.
     """
 
-    return [int(lag) for lag, value in enumerate(values[1:], start=1) if abs(value) > confidence]
+    lags = []
+    for lag, value in enumerate(values[1:], start=1):
+        if abs(value) > confidence:
+            lags.append(lag)
+    return lags
 
 
-def select_candidate_orders(
-    acf_pacf_result: Dict[str, Any],
-    max_ar: int = 6,
-    max_ma: int = 6,
-) -> Dict[str, Any]:
-    """Select candidate AR and ARMA orders from significant ACF/PACF lags.
+def choose_order_from_lags(significant: list[int], maximum: int = 6) -> int:
+    """Choose a small model order from significant ACF/PACF lags.
 
     Inputs:
-        acf_pacf_result (dict): Output from compute_acf_pacf.
-        max_ar (int): Maximum AR order to propose.
-        max_ma (int): Maximum MA order to propose.
+        significant (list[int]): Significant lags.
+        maximum (int): Maximum order allowed for this lab project.
 
     Outputs:
-        dict: Candidate AR order, ARMA order, significant lags, and justification.
+        int: Candidate order, at least 1 and no larger than maximum.
     """
 
-    acf_lags = significant_lags(acf_pacf_result["acf"], acf_pacf_result["confidence"])
-    pacf_lags = significant_lags(acf_pacf_result["pacf"], acf_pacf_result["confidence"])
-
-    ar_p = min(max(pacf_lags) if pacf_lags else 1, max_ar)
-    arma_p = max(1, min(ar_p, max_ar))
-    arma_q = min(max(acf_lags) if acf_lags else 1, max_ma)
-
-    justification = (
-        f"PACF significant lags={pacf_lags or 'none'} suggest AR p={ar_p}; "
-        f"ACF significant lags={acf_lags or 'none'} suggest MA q={arma_q}. "
-        "Orders are capped to keep the model parsimonious and stable."
-    )
-    return {
-        "ar_order": (int(ar_p), 0, 0),
-        "arma_order": (int(arma_p), 0, int(arma_q)),
-        "significant_acf_lags": acf_lags,
-        "significant_pacf_lags": pacf_lags,
-        "justification": justification,
-    }
+    if not significant:
+        return 1
+    return min(max(significant), maximum)
 
 
 def analyse_acf_pacf_collection(
     normalized_series: Dict[str, pd.Series],
-    nlags: int | None = None,
-) -> Dict[str, Dict[str, Any]]:
-    """Run ACF/PACF analysis and order selection for all normalized series.
+    nlags: int = 24,
+    max_order: int = 6,
+) -> Dict[str, dict]:
+    """Compute ACF/PACF and choose candidate AR and ARMA orders.
 
     Inputs:
-        normalized_series (dict[str, pd.Series]): Series from Section 1.
-        nlags (int | None): Number of lags for all series, or None for default.
+        normalized_series (dict[str, pd.Series]): Normalized series from Section 1.
+        nlags (int): Number of monthly lags for ACF/PACF plots.
+        max_order (int): Maximum AR or MA order allowed.
 
     Outputs:
-        dict[str, dict]: ACF/PACF arrays and selected candidate model orders.
+        dict[str, dict]: ACF/PACF values and candidate model orders.
     """
 
-    results: Dict[str, Dict[str, Any]] = {}
+    results: Dict[str, dict] = {}
     for label, series in normalized_series.items():
-        acf_pacf_result = compute_acf_pacf(series, nlags=nlags)
-        orders = select_candidate_orders(acf_pacf_result)
-        results[label] = {"acf_pacf": acf_pacf_result, "orders": orders}
+        clean = series.dropna().astype(float)
+        if len(clean) <= nlags + 5:
+            raise ValueError(f"{label} is too short for {nlags} ACF/PACF lags.")
+
+        acf_values = acf(clean, nlags=nlags, fft=True)
+        pacf_values = pacf(clean, nlags=nlags, method="ywm")
+        confidence = float(1.96 / np.sqrt(len(clean)))
+        acf_lags = significant_lags(acf_values, confidence)
+        pacf_lags = significant_lags(pacf_values, confidence)
+
+        p = choose_order_from_lags(pacf_lags, maximum=max_order)
+        q = choose_order_from_lags(acf_lags, maximum=max_order)
+
+        results[label] = {
+            "lags": np.arange(nlags + 1),
+            "acf": acf_values,
+            "pacf": pacf_values,
+            "confidence": confidence,
+            "significant_acf_lags": acf_lags,
+            "significant_pacf_lags": pacf_lags,
+            "ar_order": (p, 0, 0),
+            "arma_order": (p, 0, q),
+        }
     return results
 
 
-def format_order_selection(order_results: Dict[str, Dict[str, Any]]) -> str:
-    """Format Section 2 order-selection results for notebook printing.
+def format_order_selection(order_results: Dict[str, dict]) -> str:
+    """Format Section 2 results for notebook printing.
 
     Inputs:
-        order_results (dict): Output from analyse_acf_pacf_collection.
+        order_results (dict[str, dict]): Output from analyse_acf_pacf_collection.
 
     Outputs:
-        str: Human-readable selected orders and justification.
+        str: Readable ACF/PACF and candidate-order summary.
     """
 
     lines = []
     for label, result in order_results.items():
-        orders = result["orders"]
         lines.append(f"{label}")
-        lines.append(f"  AR candidate order: {orders['ar_order']}")
-        lines.append(f"  ARMA candidate order: {orders['arma_order']}")
-        lines.append(f"  justification: {orders['justification']}")
+        lines.append(f"  significant PACF lags: {result['significant_pacf_lags'] or 'none'}")
+        lines.append(f"  significant ACF lags: {result['significant_acf_lags'] or 'none'}")
+        lines.append(f"  AR candidate order: {result['ar_order']}")
+        lines.append(f"  ARMA candidate order: {result['arma_order']}")
+        lines.append("  note: orders are capped at 6 to keep the models simple.")
     return "\n".join(lines)
 
