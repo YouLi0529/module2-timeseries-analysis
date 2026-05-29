@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Dict
-
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -13,16 +11,7 @@ from .data_loading import StationData, flatten_station_data
 
 
 def analyse_one_series(series: pd.Series, alpha: float = 0.05) -> dict:
-    """Analyse trend, stationarity, and zero-mean transformation for one series.
-
-    Inputs:
-        series (pd.Series): Monthly Q or C values indexed by datetime.
-        alpha (float): Significance level for the linear trend test.
-
-    Outputs:
-        dict: Original series, trend statistics, ADF p-value, normalized series,
-        removed component, and variance after transformation.
-    """
+    """Check one monthly series and make it ready for AR/ARMA fitting."""
 
     clean = series.dropna().astype(float)
     if len(clean) < 12:
@@ -68,32 +57,17 @@ def analyse_one_series(series: pd.Series, alpha: float = 0.05) -> dict:
     }
 
 
-def run_timeseries_review(monthly_data: StationData, alpha: float = 0.05) -> Dict[str, dict]:
-    """Run Section 1 analysis for all station-variable series.
+def run_timeseries_review(monthly_data: StationData, alpha: float = 0.05) -> dict[str, dict]:
+    """Run the Section 1 checks for all Q and C series."""
 
-    Inputs:
-        monthly_data (StationData): Monthly mean Q and C data by station.
-        alpha (float): Significance level for trend and ADF tests.
-
-    Outputs:
-        dict[str, dict]: Section 1 results keyed by labels such as "Gisingen_Q".
-    """
-
-    results: Dict[str, dict] = {}
-    for label, series in flatten_station_data(monthly_data).items():
-        results[label] = analyse_one_series(series.rename(label), alpha=alpha)
-    return results
+    return {
+        label: analyse_one_series(series.rename(label), alpha=alpha)
+        for label, series in flatten_station_data(monthly_data).items()
+    }
 
 
-def normalized_series_collection(review_results: Dict[str, dict]) -> Dict[str, pd.Series]:
-    """Collect normalized series from Section 1 results.
-
-    Inputs:
-        review_results (dict[str, dict]): Output from run_timeseries_review.
-
-    Outputs:
-        dict[str, pd.Series]: Normalized series keyed by station-variable label.
-    """
+def normalized_series_collection(review_results: dict[str, dict]) -> dict[str, pd.Series]:
+    """Collect the normalized series used in Sections 2 and 3."""
 
     return {
         label: result["normalized"].rename(label)
@@ -101,15 +75,8 @@ def normalized_series_collection(review_results: Dict[str, dict]) -> Dict[str, p
     }
 
 
-def format_timeseries_review(review_results: Dict[str, dict]) -> str:
-    """Format Section 1 results for notebook printing.
-
-    Inputs:
-        review_results (dict[str, dict]): Output from run_timeseries_review.
-
-    Outputs:
-        str: Readable summary of trend tests and transformations.
-    """
+def format_timeseries_review(review_results: dict[str, dict]) -> str:
+    """Make a readable Section 1 printout."""
 
     lines = []
     for label, result in review_results.items():
@@ -123,4 +90,3 @@ def format_timeseries_review(review_results: Dict[str, dict]) -> str:
         lines.append(f"  mean after removal: {result['mean_after']:.6g}")
         lines.append(f"  variance after removal: {result['variance_after']:.6g}")
     return "\n".join(lines)
-

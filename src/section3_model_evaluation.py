@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 import warnings
 
 import numpy as np
@@ -15,15 +15,7 @@ from statsmodels.tsa.stattools import acf
 
 
 def fit_model(series: pd.Series, order: tuple[int, int, int]) -> Any:
-    """Fit one zero-mean AR or ARMA model.
-
-    Inputs:
-        series (pd.Series): Normalized monthly series from Section 1.
-        order (tuple[int, int, int]): ARIMA order, with d=0 in this project.
-
-    Outputs:
-        statsmodels result: Fitted model object.
-    """
+    """Fit one zero-mean AR or ARMA model."""
 
     clean = series.dropna().astype(float)
     with warnings.catch_warnings():
@@ -38,15 +30,7 @@ def fit_model(series: pd.Series, order: tuple[int, int, int]) -> Any:
 
 
 def model_theoretical_acf(fit_result: Any, nlags: int) -> np.ndarray:
-    """Compute theoretical ACF from fitted ARMA parameters.
-
-    Inputs:
-        fit_result: Fitted statsmodels ARIMA result.
-        nlags (int): Number of lags to include.
-
-    Outputs:
-        np.ndarray: Theoretical ACF from lag 0 to nlags.
-    """
+    """Compute the theoretical ACF from fitted ARMA parameters."""
 
     ar = np.r_[1.0, -np.asarray(fit_result.arparams)]
     ma = np.r_[1.0, np.asarray(fit_result.maparams)]
@@ -54,14 +38,7 @@ def model_theoretical_acf(fit_result: Any, nlags: int) -> np.ndarray:
 
 
 def residual_normality(residuals: pd.Series) -> dict:
-    """Calculate simple residual normality diagnostics.
-
-    Inputs:
-        residuals (pd.Series): Model residuals.
-
-    Outputs:
-        dict: PPCC and Shapiro-Wilk p-value.
-    """
+    """Calculate two simple residual normality checks."""
 
     clean = residuals.dropna().astype(float)
     (osm, osr), _ = stats.probplot(clean, dist="norm")
@@ -80,21 +57,15 @@ def evaluate_one_model(
     nlags: int = 24,
     alpha: float = 0.05,
 ) -> dict:
-    """Fit one candidate model and calculate diagnostics.
-
-    Inputs:
-        series (pd.Series): Normalized monthly series.
-        order (tuple[int, int, int]): Candidate AR or ARMA order.
-        nlags (int): Number of ACF lags for plots and diagnostics.
-        alpha (float): Significance level for the Ljung-Box test.
-
-    Outputs:
-        dict: Fitted model, AIC/BIC, ACFs, residuals, and diagnostic p-values.
-    """
+    """Fit one candidate model and calculate the diagnostics used in the notebook."""
 
     clean = series.dropna().astype(float)
     fit_result = fit_model(clean, order)
-    residuals = pd.Series(fit_result.resid, index=clean.index[-len(fit_result.resid) :], name="residual").dropna()
+    residuals = pd.Series(
+        fit_result.resid,
+        index=clean.index[-len(fit_result.resid) :],
+        name="residual",
+    ).dropna()
     ljung = acorr_ljungbox(residuals, lags=[12], return_df=True)
     ljung_p_value = float(ljung["lb_pvalue"].iloc[0])
 
@@ -117,15 +88,7 @@ def evaluate_one_model(
 
 
 def choose_model(ar_result: dict, arma_result: dict) -> str:
-    """Choose AR or ARMA using residual independence first, then BIC.
-
-    Inputs:
-        ar_result (dict): Diagnostics for the AR candidate.
-        arma_result (dict): Diagnostics for the ARMA candidate.
-
-    Outputs:
-        str: "AR" or "ARMA".
-    """
+    """Choose AR or ARMA using residual independence first, then BIC."""
 
     if ar_result["residuals_independent"] and not arma_result["residuals_independent"]:
         return "AR"
@@ -135,24 +98,14 @@ def choose_model(ar_result: dict, arma_result: dict) -> str:
 
 
 def evaluate_model_collection(
-    normalized_series: Dict[str, pd.Series],
-    order_results: Dict[str, dict],
+    normalized_series: dict[str, pd.Series],
+    order_results: dict[str, dict],
     nlags: int = 24,
     alpha: float = 0.05,
-) -> Dict[str, dict]:
-    """Fit AR and ARMA candidates for all series and choose final models.
+) -> dict[str, dict]:
+    """Fit AR and ARMA candidates for all series."""
 
-    Inputs:
-        normalized_series (dict[str, pd.Series]): Normalized series from Section 1.
-        order_results (dict[str, dict]): Candidate orders from Section 2.
-        nlags (int): Number of lags for diagnostic plots.
-        alpha (float): Significance level for the Ljung-Box test.
-
-    Outputs:
-        dict[str, dict]: AR diagnostics, ARMA diagnostics, and chosen model.
-    """
-
-    results: Dict[str, dict] = {}
+    results: dict[str, dict] = {}
     for label, series in normalized_series.items():
         ar_result = evaluate_one_model(series, order_results[label]["ar_order"], nlags, alpha)
         arma_result = evaluate_one_model(series, order_results[label]["arma_order"], nlags, alpha)
@@ -168,15 +121,8 @@ def evaluate_model_collection(
     return results
 
 
-def format_model_evaluation(evaluation_results: Dict[str, dict]) -> str:
-    """Format Section 3 model diagnostics for notebook printing.
-
-    Inputs:
-        evaluation_results (dict[str, dict]): Output from evaluate_model_collection.
-
-    Outputs:
-        str: Readable model comparison and final model choices.
-    """
+def format_model_evaluation(evaluation_results: dict[str, dict]) -> str:
+    """Make a readable Section 3 printout."""
 
     lines = []
     for label, result in evaluation_results.items():
@@ -199,4 +145,3 @@ def format_model_evaluation(evaluation_results: Dict[str, dict]) -> str:
             )
         lines.append(f"  chosen model: {result['chosen_name']} {result['chosen']['order']}")
     return "\n".join(lines)
-
