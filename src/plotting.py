@@ -25,24 +25,29 @@ def plot_monthly_timeseries(
     review_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot monthly Q and C series with trend lines."""
     fig, axes = plt.subplots(2, 2, figsize=(13, 7), sharex=False)
-    variables = [("Q", "Discharge Q (m3/s)"), ("C", "SSC C (g/L)")]
+    vars_list = [("Q", "Discharge Q (m3/s)"), ("C", "SSC C (g/L)")]
+    
     for row, station in enumerate(("Gisingen", "Diepoldsau")):
-        for col, (variable, ylabel) in enumerate(variables):
+        for col, (variable, ylabel) in enumerate(vars_list):
             ax = axes[row, col]
             series = monthly_data[station][variable]
             label = f"{station}_{variable}"
+            
             ax.plot(series.index, series.values, lw=1.2, label="monthly mean")
-            trend = review_results[label]["trend"]["trend"]
-            if review_results[label]["trend"]["significant"]:
+            trend_info = review_results[label]["trend"]
+            trend = trend_info["trend"]
+            
+            if trend_info["significant"]:
                 ax.plot(trend.index, trend.values, color="crimson", lw=1.4, label="significant trend")
             else:
                 ax.plot(trend.index, trend.values, color="gray", lw=1.0, ls="--", label="linear fit")
+                
             ax.set_title(f"{station} {variable}")
             ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.25)
             ax.legend(fontsize=8)
+            
     fig.tight_layout()
     return _save(fig, output_path)
 
@@ -51,17 +56,19 @@ def plot_acf_pacf_grid(
     order_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot ACF and PACF for all series."""
     labels = list(order_results)
     fig, axes = plt.subplots(len(labels), 2, figsize=(12, 2.7 * len(labels)), sharex=False)
+    
     if len(labels) == 1:
         axes = np.array([axes])
+        
     for row, label in enumerate(labels):
         acf_pacf = order_results[label]["acf_pacf"]
         for col, key in enumerate(("acf", "pacf")):
             ax = axes[row, col]
             lags = acf_pacf["lags"]
             values = acf_pacf[key]
+            
             ax.stem(lags, values, basefmt=" ", linefmt="C0-", markerfmt="C0o")
             conf = acf_pacf["confidence"]
             ax.axhline(conf, color="crimson", ls="--", lw=1)
@@ -71,6 +78,7 @@ def plot_acf_pacf_grid(
             ax.set_xlabel("Lag (months)")
             ax.set_ylabel("Correlation")
             ax.grid(True, alpha=0.2)
+            
     fig.tight_layout()
     return _save(fig, output_path)
 
@@ -79,11 +87,12 @@ def plot_model_diagnostics(
     evaluation_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot model diagnostics: empirical/theoretical ACF, residual ACF, and QQ plots."""
     labels = list(evaluation_results)
     fig, axes = plt.subplots(len(labels), 3, figsize=(15, 2.9 * len(labels)))
+    
     if len(labels) == 1:
         axes = np.array([axes])
+        
     for row, label in enumerate(labels):
         chosen = evaluation_results[label]["chosen"]
         lags = chosen["lags"]
@@ -118,6 +127,7 @@ def plot_model_diagnostics(
         ax.set_xlabel("Theoretical quantiles")
         ax.set_ylabel("Ordered residuals")
         ax.grid(True, alpha=0.2)
+        
     fig.tight_layout()
     return _save(fig, output_path)
 
@@ -127,12 +137,13 @@ def plot_synthetic_series(
     review_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot historical normalized data with synthetic normalized paths."""
     labels = list(sediment_results["synthetic"])
     fig, axes = plt.subplots(len(labels), 1, figsize=(12, 2.5 * len(labels)), sharex=False)
+    
     if len(labels) == 1:
-        axes = [axes]
-    for ax, label in zip(axes, labels):
+        axes = np.array([axes])
+        
+    for ax, label in zip(axes.ravel(), labels):
         historical = review_results[label]["normalization"]["series"]
         ax.plot(historical.index, historical.values, color="black", lw=1.0, label="historical normalized")
         synthetic = sediment_results["synth"][label]["norm"]
@@ -141,6 +152,7 @@ def plot_synthetic_series(
         ax.set_title(f"{label}: historical normalized data and 10 synthetic paths")
         ax.axhline(0, color="gray", lw=0.8)
         ax.grid(True, alpha=0.2)
+        
     fig.tight_layout()
     return _save(fig, output_path)
 
@@ -149,8 +161,8 @@ def plot_sediment_yields(
     sediment_results: Dict[str, Any],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot observed monthly climatology and synthetic contribution summaries."""
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
+    
     for station, result in sediment_results["obs"]["stations"].items():
         climatology = result["yields"]["by_month"]
         axes[0].plot(climatology.index, climatology["kg_s"], marker="o", label=station)
@@ -171,6 +183,7 @@ def plot_sediment_yields(
     axes[1].set_ylabel("Ill / Rhein mass rate (%)")
     axes[1].tick_params(axis="x", rotation=45)
     axes[1].grid(True, axis="y", alpha=0.25)
+    
     fig.tight_layout()
     return _save(fig, output_path)
 
@@ -179,17 +192,19 @@ def plot_dependency_scatter(
     dependency_results: Dict[str, Dict[str, Any]],
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot Q-C joint distributions for each station."""
     stations = list(dependency_results)
     fig, axes = plt.subplots(1, len(stations), figsize=(6 * len(stations), 4.5))
+    
     if len(stations) == 1:
-        axes = [axes]
-    for ax, station in zip(axes, stations):
+        axes = np.array([axes])
+        
+    for ax, station in zip(axes.ravel(), stations):
         frame = dependency_results[station]["data"]
         ax.scatter(frame["Q"], frame["C"], s=22, alpha=0.7)
         ax.set_title(f"{station}: Q-C joint distribution")
         ax.set_xlabel("Q (m3/s)")
         ax.set_ylabel("C (g/L)")
         ax.grid(True, alpha=0.25)
+        
     fig.tight_layout()
     return _save(fig, output_path)

@@ -9,7 +9,6 @@ from .data_loading import StationData, align_station_q_c
 
 
 def correlation_tests(frame: pd.DataFrame) -> dict:
-    """Pearson, Spearman, Kendall tests."""
     clean = frame[["Q", "C"]].dropna().astype(float)
     if len(clean) < 3:
         raise ValueError("Need 3+ pairs.")
@@ -36,18 +35,18 @@ def correlation_tests(frame: pd.DataFrame) -> dict:
 
 
 def run_dependency_analysis(monthly_data: StationData) -> dict:
-    """Q-C dependency for all stations."""
     return {st: correlation_tests(align_station_q_c(monthly_data, st)) for st in monthly_data}
 
 
-def format_dependency_results(dependency_results: dict) -> str:
-    """Format results for output."""
+def format_dependency_results(res_dict: dict) -> str:
     lines = []
-    for st, res in dependency_results.items():
-        lines.append(f"{st}")
-        lines.append(f"  n={res['n']}")
-        lines.append(f"  Pearson r={res['pr']:.4f}, p={res['pp']:.4g}")
-        lines.append(f"  Spearman rho={res['sr']:.4f}, p={res['sp']:.4g}")
-        lines.append(f"  Kendall tau={res['kt']:.4f}, p={res['kp']:.4g}")
-        lines.append(f"  {res['note']}")
+    for st, res in res_dict.items():
+        lines.extend([
+            f"{st}",
+            f"  n={res['n']}",
+            f"  Pearson r={res['pr']:.4f}, p={res['pp']:.4g}",
+            f"  Spearman rho={res['sr']:.4f}, p={res['sp']:.4g}",
+            f"  Kendall tau={res['kt']:.4f}, p={res['kp']:.4g}",
+            f"  {res['note']}"
+        ])
     return "\n".join(lines)
